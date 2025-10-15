@@ -1,0 +1,46 @@
+FUEL SURCHARGE SCRAPER - QUICK REFERENCE
+========================================
+
+✅ STATUS: WORKING - All 3 carriers successfully scraped
+
+📦 FILES:
+---------
+scraper_selenium.py          - Main scraper (USE THIS)
+requirements.txt             - Dependencies
+README.md                    - Full documentation
+SUCCESS_REPORT.md           - Technical details
+
+📊 LATEST DATA (166 rows):
+--------------------------
+fuel_surcharge_ups_20251015_223343.csv      - UPS Ground (60 rows)
+fuel_surcharge_fedex_20251015_223343.csv    - FedEx Ground (21 rows)
+fuel_surcharge_dhl_20251015_223343.csv      - DHL Express (85 rows)
+fuel_surcharge_combined_20251015_223343.csv - All combined (166 rows)
+
+🚀 HOW TO RUN:
+--------------
+cd /Volumes/RochusSSD/GenAI/ReFuel/fuel_scraper
+source venv/bin/activate
+python scraper_selenium.py
+
+⏱️ RUNTIME: ~60 seconds
+📈 SUCCESS RATE: 100% (all 3 carriers)
+
+💡 WHAT IT DOES:
+----------------
+✅ UPS:   Scrapes 60 fuel price brackets ($1.93-$4.36, 18.50%-22.00%)
+✅ FedEx: Scrapes 21 fuel price brackets ($1.43-$4.00, 18.25%-21.00%)
+✅ DHL:   Scrapes 85 fuel price brackets ($1.18-$3.73, 10%-31%)
+
+🔧 REQUIREMENTS:
+----------------
+- Python 3.9+
+- Chrome browser (ChromeDriver auto-installed)
+- Dependencies in venv (already set up)
+
+📅 SCHEDULE:
+------------
+Recommended: Run weekly or monthly
+crontab example:
+0 6 * * 1 cd /path/to/fuel_scraper && source venv/bin/activate && python scraper_selenium.py
+
