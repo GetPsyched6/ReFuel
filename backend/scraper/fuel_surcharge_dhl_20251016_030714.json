@@ -1,0 +1,682 @@
+[
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.18",
+    "but_less_than_usd": "1.21",
+    "surcharge": "10 %",
+    "scraped_at": "2025-10-16T03:06:29.219669"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.21",
+    "but_less_than_usd": "1.24",
+    "surcharge": "10.25 %",
+    "scraped_at": "2025-10-16T03:06:29.219705"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.24",
+    "but_less_than_usd": "1.27",
+    "surcharge": "10.5 %",
+    "scraped_at": "2025-10-16T03:06:29.219722"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.27",
+    "but_less_than_usd": "1.30",
+    "surcharge": "10.75 %",
+    "scraped_at": "2025-10-16T03:06:29.219735"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.30",
+    "but_less_than_usd": "1.33",
+    "surcharge": "11 %",
+    "scraped_at": "2025-10-16T03:06:29.219748"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.33",
+    "but_less_than_usd": "1.36",
+    "surcharge": "11.25 %",
+    "scraped_at": "2025-10-16T03:06:29.219772"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.36",
+    "but_less_than_usd": "1.39",
+    "surcharge": "11.5 %",
+    "scraped_at": "2025-10-16T03:06:29.219783"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.39",
+    "but_less_than_usd": "1.42",
+    "surcharge": "11.75 %",
+    "scraped_at": "2025-10-16T03:06:29.219794"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.42",
+    "but_less_than_usd": "1.45",
+    "surcharge": "12 %",
+    "scraped_at": "2025-10-16T03:06:29.219805"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.45",
+    "but_less_than_usd": "1.48",
+    "surcharge": "12.25 %",
+    "scraped_at": "2025-10-16T03:06:29.219817"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.48",
+    "but_less_than_usd": "1.51",
+    "surcharge": "12.5 %",
+    "scraped_at": "2025-10-16T03:06:29.219828"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.51",
+    "but_less_than_usd": "1.54",
+    "surcharge": "12.75 %",
+    "scraped_at": "2025-10-16T03:06:29.219839"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.54",
+    "but_less_than_usd": "1.57",
+    "surcharge": "13 %",
+    "scraped_at": "2025-10-16T03:06:29.219850"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.57",
+    "but_less_than_usd": "1.60",
+    "surcharge": "13.25 %",
+    "scraped_at": "2025-10-16T03:06:29.219861"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.60",
+    "but_less_than_usd": "1.63",
+    "surcharge": "13.5 %",
+    "scraped_at": "2025-10-16T03:06:29.219879"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.63",
+    "but_less_than_usd": "1.66",
+    "surcharge": "13.75 %",
+    "scraped_at": "2025-10-16T03:06:29.219897"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.66",
+    "but_less_than_usd": "1.69",
+    "surcharge": "14 %",
+    "scraped_at": "2025-10-16T03:06:29.219908"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.69",
+    "but_less_than_usd": "1.72",
+    "surcharge": "14.25 %",
+    "scraped_at": "2025-10-16T03:06:29.219919"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.72",
+    "but_less_than_usd": "1.75",
+    "surcharge": "14.5 %",
+    "scraped_at": "2025-10-16T03:06:29.219930"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.75",
+    "but_less_than_usd": "1.78",
+    "surcharge": "14.75 %",
+    "scraped_at": "2025-10-16T03:06:29.219941"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.78",
+    "but_less_than_usd": "1.81",
+    "surcharge": "15 %",
+    "scraped_at": "2025-10-16T03:06:29.219951"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.81",
+    "but_less_than_usd": "1.84",
+    "surcharge": "15.25 %",
+    "scraped_at": "2025-10-16T03:06:29.219962"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.84",
+    "but_less_than_usd": "1.87",
+    "surcharge": "15.5 %",
+    "scraped_at": "2025-10-16T03:06:29.219973"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.87",
+    "but_less_than_usd": "1.90",
+    "surcharge": "15.75 %",
+    "scraped_at": "2025-10-16T03:06:29.219984"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.90",
+    "but_less_than_usd": "1.93",
+    "surcharge": "16 %",
+    "scraped_at": "2025-10-16T03:06:29.219994"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.93",
+    "but_less_than_usd": "1.96",
+    "surcharge": "16.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220005"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.96",
+    "but_less_than_usd": "1.99",
+    "surcharge": "16.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220016"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "1.99",
+    "but_less_than_usd": "2.02",
+    "surcharge": "16.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220027"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.02",
+    "but_less_than_usd": "2.05",
+    "surcharge": "17 %",
+    "scraped_at": "2025-10-16T03:06:29.220037"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.05",
+    "but_less_than_usd": "2.08",
+    "surcharge": "17.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220048"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.08",
+    "but_less_than_usd": "2.11",
+    "surcharge": "17.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220059"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.11",
+    "but_less_than_usd": "2.14",
+    "surcharge": "17.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220070"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.14",
+    "but_less_than_usd": "2.17",
+    "surcharge": "18 %",
+    "scraped_at": "2025-10-16T03:06:29.220080"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.17",
+    "but_less_than_usd": "2.20",
+    "surcharge": "18.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220091"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.20",
+    "but_less_than_usd": "2.23",
+    "surcharge": "18.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220101"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.23",
+    "but_less_than_usd": "2.26",
+    "surcharge": "18.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220112"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.26",
+    "but_less_than_usd": "2.29",
+    "surcharge": "19 %",
+    "scraped_at": "2025-10-16T03:06:29.220123"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.29",
+    "but_less_than_usd": "2.32",
+    "surcharge": "19.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220133"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.32",
+    "but_less_than_usd": "2.35",
+    "surcharge": "19.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220144"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.35",
+    "but_less_than_usd": "2.38",
+    "surcharge": "19.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220154"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.38",
+    "but_less_than_usd": "2.41",
+    "surcharge": "20 %",
+    "scraped_at": "2025-10-16T03:06:29.220165"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.41",
+    "but_less_than_usd": "2.44",
+    "surcharge": "20.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220176"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.44",
+    "but_less_than_usd": "2.47",
+    "surcharge": "20.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220187"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.47",
+    "but_less_than_usd": "2.50",
+    "surcharge": "20.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220197"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.50",
+    "but_less_than_usd": "2.53",
+    "surcharge": "21 %",
+    "scraped_at": "2025-10-16T03:06:29.220208"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.53",
+    "but_less_than_usd": "2.56",
+    "surcharge": "21.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220219"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.56",
+    "but_less_than_usd": "2.59",
+    "surcharge": "21.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220229"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.59",
+    "but_less_than_usd": "2.62",
+    "surcharge": "21.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220240"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.62",
+    "but_less_than_usd": "2.65",
+    "surcharge": "22 %",
+    "scraped_at": "2025-10-16T03:06:29.220251"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.65",
+    "but_less_than_usd": "2.68",
+    "surcharge": "22.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220262"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.68",
+    "but_less_than_usd": "2.71",
+    "surcharge": "22.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220281"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.71",
+    "but_less_than_usd": "2.74",
+    "surcharge": "22.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220293"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.74",
+    "but_less_than_usd": "2.77",
+    "surcharge": "23 %",
+    "scraped_at": "2025-10-16T03:06:29.220305"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.77",
+    "but_less_than_usd": "2.80",
+    "surcharge": "23.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220317"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.80",
+    "but_less_than_usd": "2.83",
+    "surcharge": "23.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220328"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.83",
+    "but_less_than_usd": "2.86",
+    "surcharge": "23.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220340"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.86",
+    "but_less_than_usd": "2.89",
+    "surcharge": "24 %",
+    "scraped_at": "2025-10-16T03:06:29.220351"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.89",
+    "but_less_than_usd": "2.92",
+    "surcharge": "24.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220363"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.92",
+    "but_less_than_usd": "2.95",
+    "surcharge": "24.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220374"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.95",
+    "but_less_than_usd": "2.98",
+    "surcharge": "24.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220385"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "2.98",
+    "but_less_than_usd": "3.01",
+    "surcharge": "25 %",
+    "scraped_at": "2025-10-16T03:06:29.220397"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.01",
+    "but_less_than_usd": "3.04",
+    "surcharge": "25.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220408"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.04",
+    "but_less_than_usd": "3.07",
+    "surcharge": "25.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220419"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.07",
+    "but_less_than_usd": "3.10",
+    "surcharge": "25.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220431"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.10",
+    "but_less_than_usd": "3.13",
+    "surcharge": "26 %",
+    "scraped_at": "2025-10-16T03:06:29.220442"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.13",
+    "but_less_than_usd": "3.16",
+    "surcharge": "26.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220454"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.16",
+    "but_less_than_usd": "3.19",
+    "surcharge": "26.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220465"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.19",
+    "but_less_than_usd": "3.22",
+    "surcharge": "26.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220476"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.22",
+    "but_less_than_usd": "3.25",
+    "surcharge": "27 %",
+    "scraped_at": "2025-10-16T03:06:29.220492"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.25",
+    "but_less_than_usd": "3.28",
+    "surcharge": "27.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220504"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.28",
+    "but_less_than_usd": "3.31",
+    "surcharge": "27.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220515"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.31",
+    "but_less_than_usd": "3.34",
+    "surcharge": "27.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220527"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.34",
+    "but_less_than_usd": "3.37",
+    "surcharge": "28 %",
+    "scraped_at": "2025-10-16T03:06:29.220538"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.37",
+    "but_less_than_usd": "3.40",
+    "surcharge": "28.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220564"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.40",
+    "but_less_than_usd": "3.43",
+    "surcharge": "28.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220576"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.43",
+    "but_less_than_usd": "3.46",
+    "surcharge": "28.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220588"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.46",
+    "but_less_than_usd": "3.49",
+    "surcharge": "29 %",
+    "scraped_at": "2025-10-16T03:06:29.220599"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.49",
+    "but_less_than_usd": "3.52",
+    "surcharge": "29.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220611"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.52",
+    "but_less_than_usd": "3.55",
+    "surcharge": "29.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220623"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.55",
+    "but_less_than_usd": "3.58",
+    "surcharge": "29.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220634"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.58",
+    "but_less_than_usd": "3.61",
+    "surcharge": "30 %",
+    "scraped_at": "2025-10-16T03:06:29.220654"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.61",
+    "but_less_than_usd": "3.64",
+    "surcharge": "30.25 %",
+    "scraped_at": "2025-10-16T03:06:29.220668"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.64",
+    "but_less_than_usd": "3.67",
+    "surcharge": "30.5 %",
+    "scraped_at": "2025-10-16T03:06:29.220682"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.67",
+    "but_less_than_usd": "3.70",
+    "surcharge": "30.75 %",
+    "scraped_at": "2025-10-16T03:06:29.220694"
+  },
+  {
+    "carrier": "DHL",
+    "service": "Express Road",
+    "at_least_usd": "3.70",
+    "but_less_than_usd": "3.73",
+    "surcharge": "31 %",
+    "scraped_at": "2025-10-16T03:06:29.220705"
+  }
+]

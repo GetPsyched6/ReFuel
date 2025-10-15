@@ -1,0 +1,122 @@
+[
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "1.93",
+    "but_less_than_usd": "2.20",
+    "surcharge": "18.50%",
+    "scraped_at": "2025-10-16T03:06:45.397448"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "2.20",
+    "but_less_than_usd": "2.47",
+    "surcharge": "18.75%",
+    "scraped_at": "2025-10-16T03:06:45.397473"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "2.47",
+    "but_less_than_usd": "2.74",
+    "surcharge": "19.00%",
+    "scraped_at": "2025-10-16T03:06:45.397486"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "2.74",
+    "but_less_than_usd": "3.01",
+    "surcharge": "19.25%",
+    "scraped_at": "2025-10-16T03:06:45.397496"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.01",
+    "but_less_than_usd": "3.28",
+    "surcharge": "19.50%",
+    "scraped_at": "2025-10-16T03:06:45.397506"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.28",
+    "but_less_than_usd": "3.55",
+    "surcharge": "19.75%",
+    "scraped_at": "2025-10-16T03:06:45.397515"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.55",
+    "but_less_than_usd": "3.64",
+    "surcharge": "20.00%",
+    "scraped_at": "2025-10-16T03:06:45.397525"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.64",
+    "but_less_than_usd": "3.73",
+    "surcharge": "20.25%",
+    "scraped_at": "2025-10-16T03:06:45.397534"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.73",
+    "but_less_than_usd": "3.82",
+    "surcharge": "20.50%",
+    "scraped_at": "2025-10-16T03:06:45.397543"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.82",
+    "but_less_than_usd": "3.91",
+    "surcharge": "20.75%",
+    "scraped_at": "2025-10-16T03:06:45.397552"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "3.91",
+    "but_less_than_usd": "4.00",
+    "surcharge": "21.00%",
+    "scraped_at": "2025-10-16T03:06:45.397561"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "4.00",
+    "but_less_than_usd": "4.09",
+    "surcharge": "21.25%",
+    "scraped_at": "2025-10-16T03:06:45.397571"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "4.09",
+    "but_less_than_usd": "4.18",
+    "surcharge": "21.50%",
+    "scraped_at": "2025-10-16T03:06:45.397581"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "4.18",
+    "but_less_than_usd": "4.27",
+    "surcharge": "21.75%",
+    "scraped_at": "2025-10-16T03:06:45.397590"
+  },
+  {
+    "carrier": "UPS",
+    "service": "Ground Domestic",
+    "at_least_usd": "4.27",
+    "but_less_than_usd": "4.36",
+    "surcharge": "22.00%",
+    "scraped_at": "2025-10-16T03:06:45.397599"
+  }
+]

@@ -1,0 +1,27 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.1
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+
+# Database
+aiosqlite>=0.19.0
+
+# Scraping (from fuel_scraper)
+selenium>=4.15.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+webdriver-manager>=4.0.0
+
+# MCP Server
+mcp>=1.17.0
+
+# AI / Watsonx (REST API only)
+httpx>=0.27.0
+
+# Utilities
+python-dotenv>=1.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+

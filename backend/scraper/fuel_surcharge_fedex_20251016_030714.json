@@ -1,0 +1,170 @@
+[
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.01",
+    "but_less_than_usd": "3.28",
+    "surcharge": "19.50%",
+    "scraped_at": "2025-10-16T03:07:14.160199"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.28",
+    "but_less_than_usd": "3.55",
+    "surcharge": "19.75%",
+    "scraped_at": "2025-10-16T03:07:14.160231"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.55",
+    "but_less_than_usd": "3.64",
+    "surcharge": "20.00%",
+    "scraped_at": "2025-10-16T03:07:14.160248"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.64",
+    "but_less_than_usd": "3.73",
+    "surcharge": "20.25%",
+    "scraped_at": "2025-10-16T03:07:14.160262"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.73",
+    "but_less_than_usd": "3.82",
+    "surcharge": "20.50%",
+    "scraped_at": "2025-10-16T03:07:14.160276"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.82",
+    "but_less_than_usd": "3.91",
+    "surcharge": "20.75%",
+    "scraped_at": "2025-10-16T03:07:14.160292"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "3.91",
+    "but_less_than_usd": "4.00",
+    "surcharge": "21.00%",
+    "scraped_at": "2025-10-16T03:07:14.160305"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "1.43",
+    "but_less_than_usd": "1.64",
+    "surcharge": "18.25%",
+    "scraped_at": "2025-10-16T03:07:14.160362"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "1.64",
+    "but_less_than_usd": "1.85",
+    "surcharge": "18.50%",
+    "scraped_at": "2025-10-16T03:07:14.160375"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "1.85",
+    "but_less_than_usd": "2.06",
+    "surcharge": "18.75%",
+    "scraped_at": "2025-10-16T03:07:14.160388"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.06",
+    "but_less_than_usd": "2.11",
+    "surcharge": "19.00%",
+    "scraped_at": "2025-10-16T03:07:14.160400"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.11",
+    "but_less_than_usd": "2.16",
+    "surcharge": "19.25%",
+    "scraped_at": "2025-10-16T03:07:14.160412"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.16",
+    "but_less_than_usd": "2.21",
+    "surcharge": "19.50%",
+    "scraped_at": "2025-10-16T03:07:14.160423"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.21",
+    "but_less_than_usd": "2.26",
+    "surcharge": "19.75%",
+    "scraped_at": "2025-10-16T03:07:14.160435"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "1.91",
+    "but_less_than_usd": "1.95",
+    "surcharge": "23.50%",
+    "scraped_at": "2025-10-16T03:07:14.160606"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "1.95",
+    "but_less_than_usd": "1.99",
+    "surcharge": "23.75%",
+    "scraped_at": "2025-10-16T03:07:14.160619"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "1.99",
+    "but_less_than_usd": "2.03",
+    "surcharge": "24.00%",
+    "scraped_at": "2025-10-16T03:07:14.160632"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.03",
+    "but_less_than_usd": "2.07",
+    "surcharge": "24.25%",
+    "scraped_at": "2025-10-16T03:07:14.160645"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.07",
+    "but_less_than_usd": "2.11",
+    "surcharge": "24.50%",
+    "scraped_at": "2025-10-16T03:07:14.160657"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.11",
+    "but_less_than_usd": "2.15",
+    "surcharge": "24.75%",
+    "scraped_at": "2025-10-16T03:07:14.160672"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "at_least_usd": "2.15",
+    "but_less_than_usd": "2.19",
+    "surcharge": "25.00%",
+    "scraped_at": "2025-10-16T03:07:14.160688"
+  }
+]
