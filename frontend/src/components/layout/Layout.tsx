@@ -20,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 								RF
 							</div>
 							<div>
-								<h1 className="text-xl font-bold bg-gradient-to-r from-ups-brown to-ups-gold bg-clip-text text-transparent dark:from-ups-gold dark:to-yellow-300">
+								<h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
 									ReFuel
 								</h1>
 								<p className="text-xs text-gray-600 dark:text-gray-400">

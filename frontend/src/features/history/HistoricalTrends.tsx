@@ -55,8 +55,8 @@ export default function HistoricalTrends() {
 	return (
 		<Card glass>
 			<div className="flex items-center gap-3 mb-6">
-				<div className="p-2 rounded-lg bg-ups-gold/10">
-					<TrendingUp className="w-5 h-5 text-ups-gold" />
+				<div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20">
+					<TrendingUp className="w-5 h-5 text-blue-500 dark:text-blue-400" />
 				</div>
 				<h2 className="text-xl font-bold">Historical Trends (30 Days)</h2>
 			</div>
@@ -94,23 +94,25 @@ export default function HistoricalTrends() {
 						<Line
 							type="monotone"
 							dataKey="UPS"
-							stroke="#D4A574"
-							strokeWidth={2}
-							dot={{ fill: "#D4A574" }}
+							stroke="#3B82F6"
+							strokeWidth={3}
+							strokeDasharray="0"
+							dot={{ fill: "#3B82F6", r: 5 }}
 						/>
 						<Line
 							type="monotone"
 							dataKey="FedEx"
-							stroke="#A78BFA"
+							stroke="#10B981"
 							strokeWidth={2}
-							dot={{ fill: "#A78BFA" }}
+							strokeDasharray="5 5"
+							dot={{ fill: "#10B981", r: 4 }}
 						/>
 						<Line
 							type="monotone"
 							dataKey="DHL"
-							stroke="#FBBF24"
+							stroke="#F97316"
 							strokeWidth={2}
-							dot={{ fill: "#FBBF24" }}
+							dot={{ fill: "#F97316", r: 4 }}
 						/>
 					</LineChart>
 				</ResponsiveContainer>

@@ -29,24 +29,33 @@ class WatsonxTokenManager:
             return self.token
         
         # Request new token
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://iam.cloud.ibm.com/identity/token",
-                data={
-                    "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
-                    "apikey": settings.WATSONX_API_KEY
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.token = data["access_token"]
-                # Token expires in 1 hour, refresh 5 minutes before
-                self.token_expiry = datetime.now() + timedelta(seconds=data.get("expires_in", 3600) - 300)
-                return self.token
-            else:
-                raise Exception(f"Failed to get token: {response.status_code}")
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://iam.cloud.ibm.com/identity/token",
+                    data={
+                        "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
+                        "apikey": settings.WATSONX_API_KEY
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    self.token = data["access_token"]
+                    # Token expires in 1 hour, refresh 5 minutes before
+                    self.token_expiry = datetime.now() + timedelta(seconds=data.get("expires_in", 3600) - 300)
+                    print(f"✓ Watsonx token refreshed successfully")
+                    return self.token
+                else:
+                    error_msg = f"Failed to get token: {response.status_code} - {response.text}"
+                    print(f"⚠️ Token error: {error_msg}")
+                    raise Exception(error_msg)
+        except httpx.TimeoutException:
+            raise Exception("Token request timed out - check network connection")
+        except Exception as e:
+            print(f"⚠️ Token manager error: {e}")
+            raise
 
 
 class AIService:
@@ -116,8 +125,20 @@ class AIService:
             if start_idx != -1:
                 json_str = json_str[start_idx:]
         
+        # Find the matching closing brace by counting nesting levels
         if not json_str.endswith("}"):
-            end_idx = json_str.rfind("}") + 1
+            brace_count = 0
+            end_idx = -1
+            for i, char in enumerate(json_str):
+                if char == "{":
+                    brace_count += 1
+                elif char == "}":
+                    brace_count -= 1
+                    if brace_count == 0:
+                        # Found the matching closing brace for the first opening brace
+                        end_idx = i + 1
+                        break
+            
             if end_idx > 0:
                 json_str = json_str[:end_idx]
         
@@ -134,7 +155,6 @@ class AIService:
             if open_count > close_count:
                 missing_braces = open_count - close_count
                 json_str += "}" * missing_braces
-                print(f"Added {missing_braces} missing closing brace(s)")
         
         # Strategy 4: Try to parse
         try:
@@ -340,40 +360,292 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanation, just JSON startin
     
     async def chat(self, message: str, context_session_id: Optional[int] = None, history: List[Dict] = None) -> str:
         """
-        Chat with AI about fuel surcharge data
+        Enhanced chat with intelligent data querying
         """
-        # Get context data
-        context = ""
-        if context_session_id:
-            data = await db.execute_query(
-                "SELECT * FROM fuel_surcharges WHERE session_id = ? LIMIT 50",
-                (context_session_id,)
-            )
-            context = f"\n\nCurrent fuel surcharge data:\n{json.dumps(data[:10], indent=2)}"
+        if not self.token_manager:
+            return "AI service is not configured. Please check your Watsonx credentials."
         
-        # Build conversation
-        history = history or []
-        conversation = "\n".join([
-            f"{msg['role'].upper()}: {msg['content']}" for msg in history[-5:]  # Last 5 messages
-        ])
-        
-        prompt = f"""You are a helpful assistant for analyzing fuel surcharge data.
+        try:
+            # Detect query type and get relevant context
+            query_type = self._detect_query_type(message)
+            context_data = await self._get_relevant_context(query_type, message, context_session_id)
+            
+            # Build conversation history
+            history = history or []
+            conversation = "\n".join([
+                f"{msg['role'].upper()}: {msg['content']}" for msg in history[-8:]  # Last 8 messages (4 exchanges)
+            ])
+            
+            # Build enhanced prompt with context
+            prompt = f"""You are an expert fuel surcharge competitive intelligence analyst. You help analyze pricing data and provide strategic insights.
 
 {conversation}
 
-Context: {context}
+CURRENT DATA CONTEXT:
+{context_data}
 
-USER: {message}
+USER QUESTION: {message}
+
+Provide a helpful, data-driven response. If referencing specific numbers, cite them accurately from the context. Be concise but insightful.
+
 ASSISTANT:"""
+            
+            response = await self._call_watsonx(prompt, max_tokens=400, temperature=0.7)
+            return response.strip()
+            
+        except Exception as e:
+            print(f"⚠️ Chat error: {e}")
+            return f"I apologize, I encountered an error: {str(e)}. Please try rephrasing your question."
+    
+    def _detect_query_type(self, message: str) -> str:
+        """Detect the type of query from user message"""
+        message_lower = message.lower()
         
-        if self.token_manager:
-            try:
-                response = await self._call_watsonx(prompt, max_tokens=300, temperature=0.7)
-                return response
-            except Exception as e:
-                return f"I'm sorry, I encountered an error: {str(e)}"
+        if any(word in message_lower for word in ['rate', 'price', 'cost', 'how much', 'percentage', '%', 'surcharge']):
+            return 'rate_query'
+        elif any(word in message_lower for word in ['compare', 'comparison', 'versus', 'vs', 'difference', 'between']):
+            return 'comparison'
+        elif any(word in message_lower for word in ['trend', 'change', 'history', 'past', 'week', 'month', 'ago']):
+            return 'historical'
+        elif any(word in message_lower for word in ['opportunity', 'optimize', 'improve', 'recommend', 'should']):
+            return 'opportunity'
+        elif any(word in message_lower for word in ['highest', 'lowest', 'cheapest', 'expensive', 'best', 'worst']):
+            return 'extremes'
         else:
-            return "AI service is not configured. Please set WATSONX_API_KEY and WATSONX_PROJECT_ID."
+            return 'general'
+    
+    async def _get_relevant_context(self, query_type: str, message: str, session_id: Optional[int]) -> str:
+        """Get relevant data based on query type"""
+        if not session_id:
+            return "No recent data available. Please run a scrape first."
+        
+        try:
+            if query_type == 'rate_query':
+                # Get specific rate information
+                data = await db.execute_query(
+                    "SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct FROM fuel_surcharges WHERE session_id = ? ORDER BY at_least_usd LIMIT 30",
+                    (session_id,)
+                )
+                return f"Recent rates:\n{json.dumps(data[:15], indent=2)}"
+            
+            elif query_type == 'comparison':
+                # Get comparison data
+                data = await db.execute_query(
+                    "SELECT carrier, AVG(surcharge_pct) as avg_pct, MIN(surcharge_pct) as min_pct, MAX(surcharge_pct) as max_pct, COUNT(*) as ranges FROM fuel_surcharges WHERE session_id = ? GROUP BY carrier",
+                    (session_id,)
+                )
+                return f"Carrier comparison:\n{json.dumps(data, indent=2)}"
+            
+            elif query_type == 'extremes':
+                # Get highest and lowest rates
+                data = await db.execute_query(
+                    """SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct 
+                       FROM fuel_surcharges 
+                       WHERE session_id = ? 
+                       ORDER BY surcharge_pct DESC 
+                       LIMIT 10""",
+                    (session_id,)
+                )
+                lowest = await db.execute_query(
+                    """SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct 
+                       FROM fuel_surcharges 
+                       WHERE session_id = ? 
+                       ORDER BY surcharge_pct ASC 
+                       LIMIT 10""",
+                    (session_id,)
+                )
+                return f"Highest rates:\n{json.dumps(data[:5], indent=2)}\n\nLowest rates:\n{json.dumps(lowest[:5], indent=2)}"
+            
+            elif query_type == 'opportunity':
+                # Get competitive positioning data
+                data = await db.execute_query(
+                    "SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct FROM fuel_surcharges WHERE session_id = ? ORDER BY carrier, at_least_usd",
+                    (session_id,)
+                )
+                # Group by carrier for analysis
+                by_carrier = {}
+                for row in data:
+                    carrier = row['carrier']
+                    if carrier not in by_carrier:
+                        by_carrier[carrier] = []
+                    by_carrier[carrier].append(row)
+                
+                summary = {carrier: {
+                    'avg': round(sum(r['surcharge_pct'] for r in rows) / len(rows), 2),
+                    'count': len(rows)
+                } for carrier, rows in by_carrier.items()}
+                
+                return f"Competitive positioning:\n{json.dumps(summary, indent=2)}\n\nSample data:\n{json.dumps(data[:10], indent=2)}"
+            
+            else:
+                # General context - provide overview
+                data = await db.execute_query(
+                    "SELECT carrier, COUNT(*) as ranges, AVG(surcharge_pct) as avg_pct FROM fuel_surcharges WHERE session_id = ? GROUP BY carrier",
+                    (session_id,)
+                )
+                return f"Data overview:\n{json.dumps(data, indent=2)}"
+                
+        except Exception as e:
+            print(f"⚠️ Context retrieval error: {e}")
+            return "Unable to retrieve specific data context."
+    
+    async def generate_executive_analysis(self, session_id: int) -> Dict:
+        """
+        Generate comprehensive executive-level analysis
+        """
+        if not self.token_manager:
+            return self._generate_fallback_executive_analysis(session_id)
+        
+        try:
+            # Get current session data
+            data = await db.execute_query(
+                "SELECT * FROM fuel_surcharges WHERE session_id = ? ORDER BY carrier, at_least_usd",
+                (session_id,)
+            )
+            
+            if not data:
+                return {"error": "No data available for analysis"}
+            
+            # Calculate detailed metrics
+            carriers = {}
+            for row in data:
+                carrier = row['carrier']
+                if carrier not in carriers:
+                    carriers[carrier] = {
+                        'rates': [],
+                        'ranges': []
+                    }
+                carriers[carrier]['rates'].append(row['surcharge_pct'])
+                carriers[carrier]['ranges'].append(f"${row['at_least_usd']:.2f}-${row['but_less_than_usd']:.2f}")
+            
+            # Calculate summaries
+            summary_data = {}
+            for carrier, info in carriers.items():
+                rates = info['rates']
+                summary_data[carrier] = {
+                    'avg': round(sum(rates) / len(rates), 2),
+                    'min': round(min(rates), 2),
+                    'max': round(max(rates), 2),
+                    'range_count': len(rates),
+                    'price_coverage': f"${data[0]['at_least_usd']:.2f}-${data[-1]['but_less_than_usd']:.2f}"
+                }
+            
+            # Get historical context for trends
+            historical_sessions = await db.execute_query(
+                "SELECT id, timestamp FROM scrape_sessions WHERE id < ? ORDER BY timestamp DESC LIMIT 5",
+                (session_id,)
+            )
+            
+            trend_context = ""
+            if historical_sessions:
+                prev_session_id = historical_sessions[0]['id']
+                prev_data = await db.execute_query(
+                    "SELECT carrier, AVG(surcharge_pct) as avg_pct FROM fuel_surcharges WHERE session_id = ? GROUP BY carrier",
+                    (prev_session_id,)
+                )
+                prev_summary = {row['carrier']: row['avg_pct'] for row in prev_data}
+                
+                # Calculate changes
+                changes = {}
+                for carrier in summary_data:
+                    if carrier in prev_summary:
+                        change = summary_data[carrier]['avg'] - prev_summary[carrier]
+                        changes[carrier] = round(change, 2)
+                
+                if changes:
+                    trend_context = f"\n\nRecent Changes (vs previous scrape):\n{json.dumps(changes, indent=2)}"
+            
+            # Construct aggressive prompt for JSON response
+            prompt = f"""You are a senior logistics pricing strategist analyzing fuel surcharge competitive intelligence.
+
+CURRENT DATA SUMMARY:
+{json.dumps(summary_data, indent=2)}
+{trend_context}
+
+YOUR TASK: Generate ONLY valid JSON with this EXACT structure:
+
+{{
+  "summary": "2-3 sentence executive summary string",
+  "key_findings": [
+    "Finding 1 with specific numbers",
+    "Finding 2 with specific data",
+    "Finding 3...",
+    "Finding 4..."
+  ],
+  "opportunities": [
+    "Opportunity 1",
+    "Opportunity 2",
+    "Opportunity 3"
+  ],
+  "risks": [
+    "Risk 1",
+    "Risk 2"
+  ],
+  "trend_commentary": "2-3 sentence string about market direction"
+}}
+
+CRITICAL RULES:
+- summary is a STRING (not an array)
+- key_findings is an ARRAY of strings (4-5 items)
+- opportunities is an ARRAY of strings (2-3 items)
+- risks is an ARRAY of strings (1-2 items)
+- trend_commentary is a STRING (not an array)
+- Be specific with percentages from the data
+- Focus on competitive positioning
+- Return ONLY the JSON object, no explanatory text
+
+Begin with {{:
+{{"""
+            
+            response_text = await self._call_watsonx(prompt, max_tokens=1500, temperature=0.4)
+            
+            # Parse JSON response
+            parsed = self._parse_json_aggressive(response_text)
+            if parsed:
+                return {
+                    "analysis": parsed,
+                    "metadata": {
+                        "session_id": session_id,
+                        "carriers_analyzed": list(summary_data.keys()),
+                        "total_ranges": sum(s['range_count'] for s in summary_data.values()),
+                        "generated_at": datetime.now().isoformat()
+                    }
+                }
+            
+            # Fallback if JSON parsing fails
+            print(f"⚠️ Executive analysis JSON parsing failed, using fallback")
+            return self._generate_fallback_executive_analysis(session_id)
+            
+        except Exception as e:
+            print(f"⚠️ Executive analysis generation error: {e}")
+            return self._generate_fallback_executive_analysis(session_id)
+    
+    def _generate_fallback_executive_analysis(self, session_id: int) -> Dict:
+        """Generate basic executive analysis without AI"""
+        return {
+            "analysis": {
+                "summary": "Competitive fuel surcharge data successfully collected and analyzed. All carriers show comparable rate structures with minor variations.",
+                "key_findings": [
+                    "Data successfully scraped from all three major carriers",
+                    "Rate structures show typical market positioning",
+                    "Multiple price ranges covered across carriers",
+                    "Opportunities exist for detailed competitive analysis"
+                ],
+                "opportunities": [
+                    "Detailed rate comparison across overlapping ranges",
+                    "Identification of optimal pricing zones"
+                ],
+                "risks": [
+                    "Market rates subject to frequent changes"
+                ],
+                "trend_commentary": "Current data provides baseline for ongoing competitive monitoring. Regular updates recommended for trend analysis."
+            },
+            "metadata": {
+                "session_id": session_id,
+                "generated_at": datetime.now().isoformat(),
+                "note": "Fallback analysis - AI analysis unavailable"
+            }
+        }
 
 
 # Global service instance

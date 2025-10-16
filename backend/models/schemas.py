@@ -78,6 +78,7 @@ class ComparisonView(str, Enum):
     NORMALIZED = "normalized"
     OVERLAP = "overlap"
     COMPLETE = "complete"
+    COMPARABLE = "comparable"
 
 
 class ComparisonRow(BaseModel):

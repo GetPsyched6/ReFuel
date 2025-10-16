@@ -17,6 +17,10 @@
 		border-color: currentColor;
 	}
 
+	html {
+		scroll-behavior: smooth;
+	}
+
 	body {
 		background-color: hsl(var(--background));
 		color: hsl(var(--foreground));
@@ -29,25 +33,58 @@
 }
 
 @layer utilities {
+	/* Enhanced Glassmorphism Effects */
 	.glass {
 		background: rgba(255, 255, 255, 0.1);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
 		border: 1px solid rgba(255, 255, 255, 0.2);
+		box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 	}
 
 	.glass-dark {
 		background: rgba(0, 0, 0, 0.2);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
 		border: 1px solid rgba(255, 255, 255, 0.1);
+		box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 	}
 
+	/* Professional Gradients */
 	.gradient-ups {
-		background: linear-gradient(135deg, #351c15 0%, #5a3a2f 100%);
+		background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 	}
 
-	.gradient-gold {
-		background: linear-gradient(135deg, #ffb500 0%, #ffd666 100%);
+	.gradient-fedex {
+		background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+	}
+
+	.gradient-dhl {
+		background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+	}
+
+	.gradient-accent {
+		background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+	}
+
+	/* Shadow Utilities */
+	.shadow-3xl {
+		box-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.4);
+	}
+
+	/* Gradient Animation */
+	@keyframes gradient {
+		0%,
+		100% {
+			background-position: 0% 50%;
+		}
+		50% {
+			background-position: 100% 50%;
+		}
+	}
+
+	.animate-gradient {
+		background-size: 200% 200%;
+		animation: gradient 3s ease infinite;
 	}
 }

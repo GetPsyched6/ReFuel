@@ -8,10 +8,21 @@ export default {
     theme: {
         extend: {
             colors: {
-                // UPS brand colors
+                // Carrier colors - professional and readable
                 ups: {
-                    brown: '#351C15',
-                    gold: '#FFB500',
+                    DEFAULT: '#3B82F6',
+                    light: '#60A5FA',
+                    dark: '#2563EB',
+                },
+                fedex: {
+                    DEFAULT: '#10B981',
+                    light: '#34D399',
+                    dark: '#059669',
+                },
+                dhl: {
+                    DEFAULT: '#F97316',
+                    light: '#FB923C',
+                    dark: '#EA580C',
                 },
             },
             backgroundImage: {

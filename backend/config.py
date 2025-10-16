@@ -4,6 +4,11 @@ Configuration management for ReFuel backend
 from pydantic_settings import BaseSettings
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load .env from project root (one level up from backend/)
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 class Settings(BaseSettings):
@@ -51,7 +56,6 @@ class Settings(BaseSettings):
     ]
     
     class Config:
-        env_file = ".env"
         case_sensitive = True
 
 

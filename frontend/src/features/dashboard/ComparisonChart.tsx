@@ -25,7 +25,7 @@ interface ComparisonRow {
 
 interface ComparisonChartProps {
 	data: ComparisonRow[];
-	view: "normalized" | "overlap" | "complete";
+	view: "normalized" | "overlap" | "complete" | "comparable";
 }
 
 export default function ComparisonChart({ data, view }: ComparisonChartProps) {
@@ -38,6 +38,12 @@ export default function ComparisonChart({ data, view }: ComparisonChartProps) {
 		}));
 	}, [data]);
 
+	// Calculate responsive bar size based on number of data points
+	const barSize = Math.max(
+		20,
+		Math.min(40, Math.floor(800 / chartData.length))
+	);
+
 	if (data.length === 0) {
 		return null;
 	}
@@ -45,25 +51,28 @@ export default function ComparisonChart({ data, view }: ComparisonChartProps) {
 	return (
 		<Card glass>
 			<div className="flex items-center gap-3 mb-6">
-				<div className="p-2 rounded-lg bg-ups-gold/10">
-					<TrendingUp className="w-5 h-5 text-ups-gold" />
+				<div className="p-2 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20 animate-pulse">
+					<TrendingUp className="w-5 h-5 text-amber-600 dark:text-amber-400" />
 				</div>
-				<h2 className="text-xl font-bold">
+				<h2 className="text-xl font-bold bg-gradient-to-r from-amber-600 to-orange-500 bg-clip-text text-transparent">
 					{view === "normalized"
 						? "Normalized Comparison Chart"
 						: view === "overlap"
 						? "Overlap Comparison Chart"
+						: view === "comparable"
+						? "Comparable Ranges Chart"
 						: "Complete Comparison Chart"}
 				</h2>
 			</div>
 
-			<div className="space-y-6">
+			<div className="space-y-8">
 				{/* Line Chart */}
-				<div>
-					<h3 className="text-sm font-semibold mb-3 text-gray-600 dark:text-gray-400">
+				<div className="p-4 rounded-xl bg-gradient-to-br from-gray-50/50 to-transparent dark:from-gray-800/30 dark:to-transparent border border-gray-200/50 dark:border-gray-700/50">
+					<h3 className="text-sm font-semibold mb-4 text-gray-700 dark:text-gray-300 flex items-center gap-2">
+						<div className="w-2 h-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"></div>
 						Trend View
 					</h3>
-					<ResponsiveContainer width="100%" height={250}>
+					<ResponsiveContainer width="100%" height={300}>
 						<LineChart data={chartData}>
 							<CartesianGrid
 								strokeDasharray="3 3"
@@ -98,25 +107,33 @@ export default function ComparisonChart({ data, view }: ComparisonChartProps) {
 							<Line
 								type="monotone"
 								dataKey="UPS"
-								stroke="#D4A574"
-								strokeWidth={2}
-								dot={{ fill: "#D4A574", r: 4 }}
+								stroke="#3B82F6"
+								strokeWidth={3}
+								strokeDasharray="0"
+								dot={{ fill: "#3B82F6", r: 5 }}
 								connectNulls
 							/>
 							<Line
 								type="monotone"
 								dataKey="FedEx"
-								stroke="#A78BFA"
+								stroke="#10B981"
 								strokeWidth={2}
-								dot={{ fill: "#A78BFA", r: 4 }}
+								strokeDasharray="5 5"
+								dot={{
+									fill: "#10B981",
+									r: 4,
+									strokeWidth: 2,
+									stroke: "#10B981",
+								}}
 								connectNulls
 							/>
 							<Line
 								type="monotone"
 								dataKey="DHL"
-								stroke="#FBBF24"
+								stroke="#F97316"
 								strokeWidth={2}
-								dot={{ fill: "#FBBF24", r: 4 }}
+								strokeDasharray="0"
+								dot={{ fill: "#F97316", r: 4 }}
 								connectNulls
 							/>
 						</LineChart>
@@ -124,11 +141,12 @@ export default function ComparisonChart({ data, view }: ComparisonChartProps) {
 				</div>
 
 				{/* Bar Chart */}
-				<div>
-					<h3 className="text-sm font-semibold mb-3 text-gray-600 dark:text-gray-400">
+				<div className="p-4 rounded-xl bg-gradient-to-br from-gray-50/50 to-transparent dark:from-gray-800/30 dark:to-transparent border border-gray-200/50 dark:border-gray-700/50">
+					<h3 className="text-sm font-semibold mb-4 text-gray-700 dark:text-gray-300 flex items-center gap-2">
+						<div className="w-2 h-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"></div>
 						Side-by-Side Comparison
 					</h3>
-					<ResponsiveContainer width="100%" height={250}>
+					<ResponsiveContainer width="100%" height={300}>
 						<BarChart data={chartData}>
 							<CartesianGrid
 								strokeDasharray="3 3"
@@ -160,9 +178,9 @@ export default function ComparisonChart({ data, view }: ComparisonChartProps) {
 								}}
 							/>
 							<Legend />
-							<Bar dataKey="UPS" fill="#D4A574" />
-							<Bar dataKey="FedEx" fill="#A78BFA" />
-							<Bar dataKey="DHL" fill="#FBBF24" />
+							<Bar dataKey="UPS" fill="#3B82F6" barSize={barSize} />
+							<Bar dataKey="FedEx" fill="#10B981" barSize={barSize} />
+							<Bar dataKey="DHL" fill="#F97316" barSize={barSize} />
 						</BarChart>
 					</ResponsiveContainer>
 				</div>

@@ -17,7 +17,7 @@ export default function ComparisonTable({
 	view,
 	sessionId,
 }: {
-	view: "normalized" | "overlap" | "complete";
+	view: "normalized" | "overlap" | "complete" | "comparable";
 	sessionId?: number;
 }) {
 	const [data, setData] = useState<ComparisonRow[]>([]);
@@ -42,7 +42,7 @@ export default function ComparisonTable({
 	if (loading) {
 		return (
 			<Card glass className="flex items-center justify-center py-12">
-				<Loader2 className="w-8 h-8 animate-spin text-ups-gold" />
+				<Loader2 className="w-8 h-8 animate-spin text-blue-500 dark:text-blue-400" />
 			</Card>
 		);
 	}
@@ -50,7 +50,7 @@ export default function ComparisonTable({
 	return (
 		<>
 			<Card glass>
-				<h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-ups-brown to-ups-gold bg-clip-text text-transparent dark:from-ups-gold dark:to-yellow-300">
+				<h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-amber-600 to-orange-500 bg-clip-text text-transparent animate-gradient">
 					Fuel Surcharge Comparison
 				</h2>
 
@@ -64,10 +64,20 @@ export default function ComparisonTable({
 					</div>
 				)}
 
-				<div className="overflow-x-auto">
-					<table className="w-full">
-						<thead>
-							<tr className="border-b border-gray-200 dark:border-gray-700">
+				{view === "comparable" && (
+					<div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700">
+						<p className="text-sm text-blue-800 dark:text-blue-200">
+							<strong>Comparable Ranges:</strong> Shows intersection ranges
+							where at least 2 carriers have data. Perfect for side-by-side
+							comparison.
+						</p>
+					</div>
+				)}
+
+				<div className="overflow-x-auto max-h-[850px] overflow-y-auto">
+					<table className="w-full relative">
+						<thead className="sticky top-0 z-10 bg-white dark:bg-gray-800">
+							<tr className="border-b border-gray-200 dark:border-gray-700 shadow-sm">
 								<th className="text-left py-3 px-4 font-semibold">
 									Price Range
 								</th>
@@ -86,7 +96,7 @@ export default function ComparisonTable({
 								return (
 									<tr
 										key={idx}
-										className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+										className="border-b border-gray-100 dark:border-gray-800 hover:bg-gradient-to-r hover:from-amber-50/50 hover:to-transparent dark:hover:from-amber-900/10 dark:hover:to-transparent transition-all duration-200"
 									>
 										<td className="py-3 px-4 font-medium">{row.price_range}</td>
 										<td className="py-3 px-4 text-center">
@@ -143,13 +153,13 @@ function SurchargeCell({
 	return (
 		<span
 			className={cn(
-				"inline-block px-3 py-1 rounded-full font-semibold",
+				"inline-block px-3 py-1 rounded-full font-semibold transition-all duration-200 hover:scale-110",
 				isLowest
-					? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-					: "text-gray-700 dark:text-gray-300"
+					? "bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg ring-2 ring-green-300/50 dark:ring-green-600/30"
+					: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
 			)}
 		>
-			{value.toFixed(1)}%
+			{value.toFixed(2)}%
 		</span>
 	);
 }

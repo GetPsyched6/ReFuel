@@ -3,6 +3,7 @@ AI API routes - Insights and chatbot
 """
 from fastapi import APIRouter, HTTPException
 from typing import Optional
+from datetime import datetime
 
 import sys
 from pathlib import Path
@@ -16,6 +17,9 @@ from services.ai_service import ai_service
 from models.database import db
 
 router = APIRouter()
+
+# In-memory conversation history storage (session_id -> messages)
+chat_sessions = {}
 
 
 @router.post("/insights", response_model=dict)
@@ -43,28 +47,76 @@ async def generate_insights(request: AIInsightRequest):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Chat with AI about fuel surcharge data
+    Chat with AI about fuel surcharge data (with conversation memory)
     """
-    # Get latest session if not specified
+    try:
+        # Ensure token is valid before attempting chat
+        if ai_service.token_manager:
+            await ai_service.token_manager.get_token()
+        
+        # Get latest session if not specified
+        session_id = request.session_id
+        if session_id is None:
+            sessions = await db.execute_query(
+                "SELECT id FROM scrape_sessions ORDER BY timestamp DESC LIMIT 1"
+            )
+            if sessions:
+                session_id = sessions[0]['id']
+        
+        # Create session key for conversation tracking
+        session_key = f"{session_id}_{datetime.now().strftime('%Y%m%d')}"
+        
+        # Get or create conversation history
+        if session_key not in chat_sessions:
+            chat_sessions[session_key] = []
+        
+        history = chat_sessions[session_key]
+        
+        # Add user message to history
+        history.append({"role": "user", "content": request.message})
+        
+        # Get AI response with full conversation context
+        response = await ai_service.chat(
+            message=request.message,
+            context_session_id=session_id,
+            history=history[:-1]  # Pass history without current message
+        )
+        
+        # Add AI response to history
+        history.append({"role": "assistant", "content": response})
+        
+        # Keep only last 20 messages (10 exchanges) to avoid token limits
+        chat_sessions[session_key] = history[-20:]
+        
+        return ChatResponse(
+            message=response,
+            context_used=session_id is not None
+        )
+    except Exception as e:
+        print(f"⚠️ Chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+@router.post("/executive-analysis", response_model=dict)
+async def generate_executive_analysis(request: AIInsightRequest):
+    """
+    Generate comprehensive executive-level analysis
+    """
     session_id = request.session_id
+    
+    # Get latest session if not specified
     if session_id is None:
         sessions = await db.execute_query(
             "SELECT id FROM scrape_sessions ORDER BY timestamp DESC LIMIT 1"
         )
-        if sessions:
-            session_id = sessions[0]['id']
+        if not sessions:
+            raise HTTPException(status_code=404, detail="No sessions found")
+        session_id = sessions[0]['id']
     
-    # Get AI response
-    response = await ai_service.chat(
-        message=request.message,
-        context_session_id=session_id,
-        history=[msg.dict() for msg in request.history]
-    )
+    # Generate executive analysis
+    analysis = await ai_service.generate_executive_analysis(session_id)
     
-    return ChatResponse(
-        message=response,
-        context_used=session_id is not None
-    )
+    return analysis
 
 
 @router.get("/insights/{session_id}")

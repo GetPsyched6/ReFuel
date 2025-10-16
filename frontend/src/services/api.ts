@@ -25,7 +25,7 @@ export const scraperApi = {
 // Comparison endpoints
 export const comparisonApi = {
 	getComparison: (
-		view: "normalized" | "overlap" | "complete" = "normalized",
+		view: "normalized" | "overlap" | "complete" | "comparable" = "normalized",
 		sessionId?: number
 	) =>
 		api.get("/comparison/compare", {
@@ -62,6 +62,9 @@ export const aiApi = {
 
 	chat: (message: string, history: any[] = [], sessionId?: number) =>
 		api.post("/ai/chat", { message, history, session_id: sessionId }),
+
+	generateExecutiveAnalysis: (sessionId?: number) =>
+		api.post("/ai/executive-analysis", { session_id: sessionId }),
 };
 
 export default api;

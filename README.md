@@ -4,13 +4,40 @@ A comprehensive fuel surcharge competitive intelligence platform for UPS, featur
 
 ## 🚀 Features
 
-- **Automated Scraping**: Stealth scraping of UPS, FedEx, and DHL fuel surcharge rates
-- **Multiple Comparison Views**: Normalized, Overlap, and Complete data views
-- **AI Insights**: Watsonx-powered competitive analysis and recommendations
-- **Interactive Chatbot**: Ask questions about fuel surcharge data
-- **Historical Trends**: Track rate changes over time with beautiful charts
+### Data & Intelligence
+
+- **Automated Scraping**: Stealth scraping of UPS, FedEx, and DHL fuel surcharge rates using Selenium
+- **4 Comparison Views**: Overlap, Comparable Ranges, Normalized Grid, and Complete data views
+- **Smart Range Comparison**: Intelligent grouping of overlapping price ranges for meaningful side-by-side comparisons
+- **Historical Trends**: Track rate changes over time with beautiful line charts
+- **Visual Charts**: Line and bar charts for all comparison views
+
+### AI-Powered Features
+
+- **🎯 Executive Analysis**: Comprehensive strategic analysis with key findings, opportunities, risks, and market trends
+- **💡 Real-Time Insights**: Dynamic AI-generated insights showing key metrics, opportunities, and recommendations
+- **🤖 Intelligent Chatbot**: Context-aware conversational AI that can:
+  - Answer specific questions about rates and prices
+  - Compare carriers and find competitive gaps
+  - Analyze trends and historical data
+  - Provide optimization recommendations
+  - Remember conversation context for natural dialogue
+- **🔮 Query Intelligence**: Automatically detects query type and fetches relevant data context
+
+### Technical Infrastructure
+
 - **MCP Server**: Model Context Protocol server for AI agent integration
-- **Premium UI**: Glassmorphism design with dark/light mode
+- **Watsonx AI**: Direct REST API integration with Llama 3.3 70B (robust JSON parsing, auto-refreshing tokens)
+- **SQLite Database**: Historical data storage with session tracking
+- **API-First Design**: RESTful API for all features
+
+### User Experience
+
+- **Welcome Dashboard**: Time-aware greeting with live data status
+- **Custom Dropdown**: Beautiful portal-based dropdown with animations (no occlusion)
+- **Premium UI**: Glassmorphism design with dark/light mode, gradients, and smooth animations
+- **Sticky Headers**: Table headers remain visible while scrolling
+- **Professional Color Scheme**: Blue (UPS), Emerald (FedEx), Orange (DHL) - optimized for accessibility
 
 ## 📁 Project Structure
 
@@ -81,23 +108,37 @@ npm install
 
 ### Environment Configuration
 
-Create `backend/.env`:
+Create `backend/.env` (copy from `backend/.env.example`):
 
 ```env
-# Watsonx AI
+# Watsonx AI Configuration
 WATSONX_API_KEY=your_api_key_here
 WATSONX_PROJECT_ID=your_project_id_here
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+WATSONX_MODEL=meta-llama/llama-3-3-70b-instruct
 
-# Optional: Email notifications
+# Optional: Email notifications (future use)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
 ```
 
+**Note**: The Watsonx IAM token expires every 24 hours and is automatically refreshed by the token manager.
+
 ## 🚀 Running the Application
 
-### Start Backend (Terminal 1)
+### Quick Start (Recommended)
+
+```bash
+./start.sh
+```
+
+This will start both backend and frontend in the background with logging.
+
+### Manual Start
+
+#### Start Backend (Terminal 1)
 
 ```bash
 cd backend
@@ -105,10 +146,10 @@ source venv/bin/activate
 python run.py
 ```
 
-API will be available at: http://localhost:8000
+API will be available at: http://localhost:8000  
 API Docs: http://localhost:8000/docs
 
-### Start MCP Server (Terminal 2, optional)
+#### Start MCP Server (Terminal 2, optional)
 
 ```bash
 cd backend
@@ -116,7 +157,7 @@ source venv/bin/activate
 python run_mcp.py
 ```
 
-### Start Frontend (Terminal 3)
+#### Start Frontend (Terminal 3)
 
 ```bash
 cd frontend
@@ -124,6 +165,16 @@ npm run dev
 ```
 
 Frontend will be available at: http://localhost:5173
+
+### Stopping the Application
+
+```bash
+# Kill backend
+lsof -ti:8000 | xargs kill -9
+
+# Kill frontend
+pkill -f "vite"
+```
 
 ## 📊 API Endpoints
 
@@ -136,11 +187,12 @@ Frontend will be available at: http://localhost:5173
 
 ### Comparison
 
-- `GET /api/comparison/compare?view={normalized|overlap|complete}` - Compare carriers
+- `GET /api/comparison/compare?view={normalized|overlap|complete|comparable}&session_id={id}` - Compare carriers
 - `GET /api/comparison/carrier/{carrier}` - Carrier-focused view
 
 ### History
 
+- `GET /api/history/sessions` - Get all scrape sessions with metadata
 - `GET /api/history/trends?days=30` - Get historical trends
 - `GET /api/history/changes` - Detect significant changes
 
@@ -161,14 +213,54 @@ The MCP server exposes fuel surcharge data for AI agent integration:
 - `get_trends` - Trend analysis
 - `get_insights` - AI insights
 
+## 🤖 AI Features Deep Dive
+
+### Executive Analysis
+
+Generates comprehensive strategic insights including:
+
+- **Executive Summary**: 2-3 sentence overview of competitive landscape
+- **Key Findings**: 4-5 data-driven insights with specific numbers
+- **Opportunities**: 2-3 areas for competitive advantage or optimization
+- **Risks & Considerations**: Areas of concern or competitive disadvantage
+- **Market Trends**: Commentary on rate changes and market direction
+
+### Intelligent Chatbot
+
+The chatbot automatically detects query intent and provides relevant responses:
+
+**Query Types**:
+
+- **Rate Queries**: "What's UPS rate at $3.50?" → Returns specific rate information
+- **Comparisons**: "Compare UPS and FedEx" → Shows carrier-by-carrier comparison
+- **Extremes**: "Which carrier has the lowest rates?" → Returns min/max analysis
+- **Opportunities**: "How can we optimize pricing?" → Provides strategic recommendations
+- **Historical**: "What changed last week?" → Analyzes trends (requires historical data)
+
+**Conversation Memory**: Remembers last 10 exchanges (20 messages) for natural dialogue
+
+### Real-Time Insights
+
+Three dynamic cards showing:
+
+1. **Key Metrics**: Average surcharge % for each carrier (calculated from real data)
+2. **Opportunities**: AI-identified competitive gaps and optimization areas
+3. **Recommendations**: Strategic recommendations based on current data
+
 ## 🎨 UI Features
 
-- **Glassmorphism**: Modern glass-effect cards
-- **Dark/Light Mode**: Toggle theme
-- **Animations**: Smooth Framer Motion transitions
-- **Data Visualization**: Line & bar charts for all comparison views
-- **Responsive**: Mobile-friendly design
-- **UPS Branding**: Brown and gold color scheme
+- **Welcome Dashboard**: Time-aware greeting with last update status and live data indicator
+- **Executive Analysis Card**: Comprehensive AI analysis with color-coded sections
+- **Glassmorphism**: Modern glass-effect cards with backdrop blur
+- **Dark/Light Mode**: Seamless theme toggle with smooth transitions
+- **Animations**: Smooth Framer Motion transitions and hover effects
+- **Data Visualization**: Interactive line & bar charts for all comparison views using Recharts
+- **Custom Dropdown**: Portal-based dropdown with animations and scroll-to-close
+- **Sticky Table Headers**: Headers stay visible when scrolling long tables
+- **Responsive**: Mobile-friendly design with responsive layouts
+- **Professional Color Scheme**: Blue (UPS), Emerald (FedEx), Orange (DHL) - optimized for accessibility
+- **Gradient Accents**: Beautiful gradients throughout (blue-purple, purple-blue)
+- **Session Selector**: View historical data with elegant custom dropdown
 
 ## 📝 Database Schema
 
@@ -183,33 +275,46 @@ See `database/schema.sql` for complete schema.
 
 ## 🔄 Scraping
 
-The scraper uses Selenium with stealth techniques:
+The scraper uses Selenium with advanced stealth techniques:
 
-- Headless Chrome
-- User agent spoofing
-- Navigator property masking
-- CDP commands for anti-detection
+- **Headless Chrome**: Undetected automated browsing
+- **User Agent Spoofing**: Mimics real browser behavior
+- **Navigator Property Masking**: Hides automation flags
+- **CDP Commands**: Chrome DevTools Protocol for anti-detection
+- **Intelligent Table Selection**: Filters out historical/archived tables to ensure only current data is scraped
+- **Accordion Handling**: Automatically expands collapsed sections (FedEx)
+- **Cookie Management**: Handles cookie consent popups
 
 **Supported Carriers:**
 
-- ✅ UPS Ground
-- ✅ FedEx Ground
-- ✅ DHL Road
+- ✅ **UPS Ground**: Direct scraping from official fuel surcharge page
+- ✅ **FedEx Ground**: Handles accordion UI and dynamic content
+- ✅ **DHL Road**: Scrapes German site with proper table identification
+
+**Data Accuracy:**
+
+- Only current fuel surcharge tables are scraped (not historical/archived data)
+- All data is validated and cleaned before storage
+- Each scrape session is tracked with metadata
 
 ## 📈 Comparison Views
 
-1. **Normalized Grid**: $0.25 intervals with interpolation
-2. **Overlap View**: Only ranges where all carriers have data
-3. **Complete View**: All ranges from all carriers
+1. **Overlap View**: Only ranges where all 3 carriers have data - perfect for direct comparison
+2. **Comparable Ranges**: Intelligent grouping of overlapping ranges where at least 2 carriers have data - shows intersection ranges for meaningful comparison
+3. **Normalized Grid**: $0.25 intervals showing actual scraped data only (no interpolation) - blank cells indicate no data
+4. **Complete View**: All ranges from all carriers - comprehensive but sparse
 
 ## 🤖 AI Integration
 
-Powered by IBM Watsonx:
+Powered by IBM Watsonx REST API (Llama 3.3 70B):
 
-- Competitive analysis
-- UPS-focused recommendations
-- Revenue optimization insights
-- Interactive chatbot
+- **Direct REST API**: Uses `httpx` for direct Watsonx API calls (no SDK)
+- **Robust JSON Parsing**: Multiple fallback strategies for handling non-standard JSON responses
+- **Auto Token Refresh**: IAM token manager with 24-hour expiration handling
+- **Aggressive Prompt Engineering**: Optimized prompts for reliable JSON output
+- **Competitive Analysis**: AI-powered insights and recommendations
+- **UPS-Focused**: Revenue optimization and competitive positioning insights
+- **Interactive Chatbot**: Context-aware conversational AI for data exploration
 
 ## 🚧 Future Enhancements
 
@@ -219,13 +324,73 @@ Powered by IBM Watsonx:
 - [ ] Advanced trend predictions
 - [ ] Multi-user authentication
 
+## 🔧 Troubleshooting
+
+### Backend Issues
+
+**Port 8000 already in use:**
+
+```bash
+lsof -ti:8000 | xargs kill -9
+```
+
+**Module import errors:**
+
+- Ensure virtual environment is activated
+- Check `sys.path.insert` statements in backend files
+- Reinstall dependencies: `pip install -r requirements.txt`
+
+**Selenium/Chrome issues:**
+
+- Install Chrome/Chromium browser
+- Install webdriver-manager: `pip install webdriver-manager`
+- Check Chrome version compatibility
+
+### Frontend Issues
+
+**Port 5173 in use:**
+
+```bash
+pkill -f "vite"
+```
+
+**Build errors:**
+
+- Clear node_modules: `rm -rf node_modules && npm install`
+- Check TypeScript errors in console
+- Ensure all dependencies are installed
+
+### Scraping Issues
+
+**No data returned:**
+
+- Check website URLs are still valid
+- Verify websites haven't changed structure
+- Check browser console for JavaScript errors
+- Review scraper logs for detailed error messages
+
+**Historical data instead of current:**
+
+- The scraper filters out historical tables automatically
+- Check `scraper_selenium.py` for table selection logic
+
+### AI/Watsonx Issues
+
+**Invalid token:**
+
+- Verify `WATSONX_API_KEY` in `.env`
+- Token auto-refreshes every 24 hours
+- Check token manager logs
+
+**JSON parsing errors:**
+
+- Multiple fallback strategies handle malformed JSON
+- Check AI service logs for details
+- Llama 3.3 70B sometimes returns unbalanced braces (handled automatically)
+
 ## 📄 License
 
-Proprietary - Internal UPS POC
-
-## 👥 Team
-
-Built for UPS competitive intelligence
+Proprietary
 
 ---
 

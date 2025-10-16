@@ -25,8 +25,23 @@ export default function AIInsights() {
 
 	if (loading) {
 		return (
-			<Card glass className="animate-pulse">
-				<div className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+			<Card glass className="border-l-4 border-blue-500 dark:border-blue-400">
+				<div className="flex items-start gap-4 animate-pulse">
+					<div className="p-3 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20">
+						<Sparkles className="w-6 h-6 text-blue-500 dark:text-blue-400 animate-pulse" />
+					</div>
+					<div className="flex-1">
+						<div className="h-6 bg-gradient-to-r from-blue-300/30 to-purple-300/30 dark:from-blue-700/30 dark:to-purple-700/30 rounded mb-3 w-1/3"></div>
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+							<div className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+							<div className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+							<div className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+						</div>
+						<div className="text-center mt-3 text-blue-600 dark:text-blue-400 text-sm font-semibold animate-pulse">
+							🤖 AI is analyzing competitive data...
+						</div>
+					</div>
+				</div>
 			</Card>
 		);
 	}
@@ -36,16 +51,16 @@ export default function AIInsights() {
 	}
 
 	return (
-		<Card glass className="border-l-4 border-ups-gold">
+		<Card glass className="border-l-4 border-blue-500 dark:border-blue-400">
 			<div className="flex items-start gap-4">
-				<div className="p-3 rounded-lg bg-ups-gold/10">
-					<Sparkles className="w-6 h-6 text-ups-gold" />
+				<div className="p-3 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20">
+					<Sparkles className="w-6 h-6 text-blue-500 dark:text-blue-400" />
 				</div>
 
 				<div className="flex-1">
-					<h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+					<h2 className="text-xl font-bold mb-3 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
 						AI Insights
-						<span className="text-xs px-2 py-1 rounded-full bg-ups-gold/20 text-ups-gold">
+						<span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 font-semibold">
 							Latest Analysis
 						</span>
 					</h2>

@@ -51,6 +51,8 @@ class ComparisonService:
             rows = self._create_normalized_view(data)
         elif view_type == ComparisonView.OVERLAP:
             rows = self._create_overlap_view(data)
+        elif view_type == ComparisonView.COMPARABLE:
+            rows = self._create_comparable_ranges_view(data)
         else:  # COMPLETE
             rows = self._create_complete_view(data)
         
@@ -189,6 +191,67 @@ class ComparisonService:
             rows.append(row)
         
         return rows
+    
+    def _create_comparable_ranges_view(self, data: List[Dict]) -> List[Dict]:
+        """
+        Create comparable ranges view by finding overlapping ranges
+        where at least 2 carriers have data
+        """
+        # Group data by carrier
+        ups_data = [d for d in data if d['carrier'] == 'UPS']
+        fedex_data = [d for d in data if d['carrier'] == 'FedEx']
+        dhl_data = [d for d in data if d['carrier'] == 'DHL']
+        
+        # Find all unique boundaries (start and end points)
+        boundaries = set()
+        for item in data:
+            boundaries.add(item['at_least_usd'])
+            boundaries.add(item['but_less_than_usd'])
+        boundaries = sorted(boundaries)
+        
+        # For each potential range, check how many carriers have data
+        comparable_rows = []
+        for i in range(len(boundaries) - 1):
+            min_val = boundaries[i]
+            max_val = boundaries[i + 1]
+            
+            # Find carriers with data in this range
+            carriers_with_data = []
+            ups_pct = self._find_range_overlap(min_val, max_val, ups_data)
+            fedex_pct = self._find_range_overlap(min_val, max_val, fedex_data)
+            dhl_pct = self._find_range_overlap(min_val, max_val, dhl_data)
+            
+            if ups_pct is not None:
+                carriers_with_data.append('UPS')
+            if fedex_pct is not None:
+                carriers_with_data.append('FedEx')
+            if dhl_pct is not None:
+                carriers_with_data.append('DHL')
+            
+            # Only include if at least 2 carriers have data
+            if len(carriers_with_data) >= 2:
+                comparable_rows.append({
+                    "price_range": f"${min_val:.2f}-${max_val:.2f}",
+                    "at_least_usd": min_val,
+                    "but_less_than_usd": max_val,
+                    "ups_pct": ups_pct,
+                    "fedex_pct": fedex_pct,
+                    "dhl_pct": dhl_pct
+                })
+        
+        return comparable_rows
+    
+    def _find_range_overlap(self, min_val: float, max_val: float, 
+                            carrier_data: List[Dict]) -> Optional[float]:
+        """
+        Check if carrier has data that overlaps with [min_val, max_val)
+        Return surcharge % if overlap exists, None otherwise
+        """
+        for item in carrier_data:
+            # Check if ranges overlap
+            if item['at_least_usd'] < max_val and item['but_less_than_usd'] > min_val:
+                return item['surcharge_pct']
+        return None
     
     def _find_exact_or_containing(self, min_val: float, max_val: float, carrier_data: List[Dict]) -> Optional[float]:
         """
