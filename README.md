@@ -14,15 +14,65 @@ A comprehensive fuel surcharge competitive intelligence platform for UPS, featur
 
 ### AI-Powered Features
 
-- **🎯 Executive Analysis**: Comprehensive strategic analysis with key findings, opportunities, risks, and market trends
-- **💡 Real-Time Insights**: Dynamic AI-generated insights showing key metrics, opportunities, and recommendations
-- **🤖 Intelligent Chatbot**: Context-aware conversational AI that can:
-  - Answer specific questions about rates and prices
-  - Compare carriers and find competitive gaps
-  - Analyze trends and historical data
-  - Provide optimization recommendations
-  - Remember conversation context for natural dialogue
-- **🔮 Query Intelligence**: Automatically detects query type and fetches relevant data context
+**🎯 Beautiful Card-Style Tab Interface** - Premium AI insights with intuitive navigation:
+
+1. **⚡ Quick Insights Tab** (Intelligent Competitive Analysis):
+
+   - **Competitive Gaps**: Where you're being undercut or have pricing power
+   - **Urgent Actions**: Real-time alerts for immediate threats/opportunities with visual badges
+   - **Week-Over-Week Trends**: Who increased/decreased rates and by how much
+   - Historical comparison with previous session
+   - Smart urgency detection (amber badge when action needed)
+   - Fixed formatting (no more "2e+01%" bugs)
+
+2. **📊 Executive Analysis Tab** (Strategic Deep Dive):
+
+   - Comprehensive strategic analysis
+   - Key findings with data-backed insights
+   - Opportunities and risks assessment
+   - Trend commentary and forecasting
+   - Auto-retry logic to prevent fallback data
+   - Executive-ready presentation
+
+3. **💡 Rate Recommendations Tab** (AI-Powered Pricing):
+   - **5-10 intelligent suggestions** with full context
+   - **Beautiful card layout** - easy to scan, no more accordion
+   - Four recommendation types with color coding:
+     - 📈 Rate Adjustment (blue) - optimize existing rates
+     - ➕ New Offering (emerald) - fill market gaps
+     - 🎯 Competitive Response (purple) - react to moves
+     - 🛡️ Defensive Move (orange) - protect position
+   - **Clear visual hierarchy**:
+     - Large badges for current → suggested rates
+     - Competitor rates in small chips
+     - AI reasoning in readable boxes
+     - Impact analysis with icons (💰 Revenue, 🏆 Position, 📊 History)
+   - Historical data integration
+   - All recommendations visible at once
+
+**ℹ️ Contextual Help Tooltips**:
+
+- Info icons (ⓘ) on each tab card
+- Natural language explanations
+- Hover to learn what each AI feature does
+- No technical jargon
+
+**🤖 Intelligent Chatbot** (Separate Panel):
+
+- Context-aware conversational AI with markdown support
+- Answer questions about rates and prices
+- Compare carriers and find competitive gaps
+- Analyze trends and historical data
+- Provide optimization recommendations
+- Conversation memory for natural dialogue
+- Query intelligence with automatic data fetching
+
+**⚙️ Parallel AI Processing**:
+
+- All three AI insights generate simultaneously
+- Independent loading states per tab
+- Switch tabs while AI processes (non-blocking)
+- Robust error handling per insight
 
 ### Technical Infrastructure
 

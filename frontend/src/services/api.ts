@@ -65,6 +65,15 @@ export const aiApi = {
 
 	generateExecutiveAnalysis: (sessionId?: number) =>
 		api.post("/ai/executive-analysis", { session_id: sessionId }),
+
+	generateQuickInsights: (sessionId?: number) =>
+		api.post("/ai/quick-insights", { session_id: sessionId }),
+
+	generateRateRecommendations: (sessionId?: number) =>
+		api.post("/ai/rate-recommendations", { session_id: sessionId }),
+
+	getAllInsights: (sessionId?: number) =>
+		api.post("/ai/all-insights", { session_id: sessionId }),
 };
 
 export default api;

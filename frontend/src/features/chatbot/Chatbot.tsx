@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { X, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { aiApi } from "@/services/api";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
 	role: "user" | "assistant";
@@ -82,6 +83,7 @@ export default function Chatbot({ onClose }: { onClose: () => void }) {
 				<button
 					onClick={onClose}
 					className="p-1 hover:bg-white/20 rounded transition-colors"
+					aria-label="Close chatbot"
 				>
 					<X className="w-5 h-5" />
 				</button>
@@ -99,13 +101,48 @@ export default function Chatbot({ onClose }: { onClose: () => void }) {
 						}`}
 					>
 						<div
-							className={`max-w-[80%] p-3 rounded-lg ${
+							className={`max-w-[80%] p-3 rounded-lg text-sm ${
 								message.role === "user"
 									? "gradient-ups text-white"
 									: "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
 							}`}
 						>
-							<p className="text-sm whitespace-pre-wrap">{message.content}</p>
+							<ReactMarkdown
+								components={{
+									p: ({ node, ...props }) => (
+										<p className="mb-2 last:mb-0" {...props} />
+									),
+									ul: ({ node, ...props }) => (
+										<ul className="list-disc ml-4 mb-2" {...props} />
+									),
+									ol: ({ node, ...props }) => (
+										<ol className="list-decimal ml-4 mb-2" {...props} />
+									),
+									li: ({ node, ...props }) => (
+										<li className="mb-1" {...props} />
+									),
+									code: ({ node, inline, ...props }: any) =>
+										inline ? (
+											<code
+												className="bg-gray-800/50 px-1 rounded text-xs"
+												{...props}
+											/>
+										) : (
+											<code
+												className="block bg-gray-800/50 p-2 rounded text-xs my-2"
+												{...props}
+											/>
+										),
+									strong: ({ node, ...props }) => (
+										<strong className="font-bold" {...props} />
+									),
+									em: ({ node, ...props }) => (
+										<em className="italic" {...props} />
+									),
+								}}
+							>
+								{message.content}
+							</ReactMarkdown>
 						</div>
 					</motion.div>
 				))}

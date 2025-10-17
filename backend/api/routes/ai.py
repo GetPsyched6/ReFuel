@@ -119,6 +119,84 @@ async def generate_executive_analysis(request: AIInsightRequest):
     return analysis
 
 
+@router.post("/quick-insights", response_model=dict)
+async def generate_quick_insights(request: AIInsightRequest):
+    """
+    Generate quick, punchy insights for rapid snapshot
+    """
+    session_id = request.session_id
+    
+    # Get latest session if not specified
+    if session_id is None:
+        sessions = await db.execute_query(
+            "SELECT id FROM scrape_sessions ORDER BY timestamp DESC LIMIT 1"
+        )
+        if not sessions:
+            raise HTTPException(status_code=404, detail="No sessions found")
+        session_id = sessions[0]['id']
+    
+    # Generate quick insights
+    insights = await ai_service.generate_quick_insights(session_id)
+    
+    return insights
+
+
+@router.post("/rate-recommendations", response_model=dict)
+async def generate_rate_recommendations(request: AIInsightRequest):
+    """
+    Generate intelligent rate recommendations with competitive analysis
+    """
+    session_id = request.session_id
+    
+    # Get latest session if not specified
+    if session_id is None:
+        sessions = await db.execute_query(
+            "SELECT id FROM scrape_sessions ORDER BY timestamp DESC LIMIT 1"
+        )
+        if not sessions:
+            raise HTTPException(status_code=404, detail="No sessions found")
+        session_id = sessions[0]['id']
+    
+    # Generate recommendations
+    recommendations = await ai_service.generate_rate_recommendations(session_id)
+    
+    return recommendations
+
+
+@router.post("/all-insights", response_model=dict)
+async def get_all_ai_insights(request: AIInsightRequest):
+    """
+    Fire all 3 AI calls in parallel: quick insights, executive analysis, and rate recommendations
+    """
+    import asyncio
+    
+    session_id = request.session_id
+    
+    # Get latest session if not specified
+    if session_id is None:
+        sessions = await db.execute_query(
+            "SELECT id FROM scrape_sessions ORDER BY timestamp DESC LIMIT 1"
+        )
+        if not sessions:
+            raise HTTPException(status_code=404, detail="No sessions found")
+        session_id = sessions[0]['id']
+    
+    # Fire all three AI calls in parallel
+    results = await asyncio.gather(
+        ai_service.generate_quick_insights(session_id),
+        ai_service.generate_executive_analysis(session_id),
+        ai_service.generate_rate_recommendations(session_id),
+        return_exceptions=True
+    )
+    
+    return {
+        "quick_insights": results[0] if not isinstance(results[0], Exception) else {"error": str(results[0])},
+        "executive_analysis": results[1] if not isinstance(results[1], Exception) else {"error": str(results[1])},
+        "recommendations": results[2] if not isinstance(results[2], Exception) else {"error": str(results[2])},
+        "session_id": session_id
+    }
+
+
 @router.get("/insights/{session_id}")
 async def get_session_insights(session_id: int):
     """
