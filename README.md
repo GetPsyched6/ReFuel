@@ -2,7 +2,7 @@
 
 A comprehensive fuel surcharge competitive intelligence platform for UPS, featuring real-time scraping, AI-powered insights, and beautiful data visualization.
 
-## 🚀 Features
+## Features
 
 ### Data & Intelligence
 
@@ -14,9 +14,9 @@ A comprehensive fuel surcharge competitive intelligence platform for UPS, featur
 
 ### AI-Powered Features
 
-**🎯 Beautiful Card-Style Tab Interface** - Premium AI insights with intuitive navigation:
+**Beautiful Card-Style Tab Interface** - Premium AI insights with intuitive navigation:
 
-1. **⚡ Quick Insights Tab** (Intelligent Competitive Analysis):
+1. **Quick Insights Tab** (Intelligent Competitive Analysis):
 
    - **Competitive Gaps**: Where you're being undercut or have pricing power
    - **Urgent Actions**: Real-time alerts for immediate threats/opportunities with visual badges
@@ -25,7 +25,7 @@ A comprehensive fuel surcharge competitive intelligence platform for UPS, featur
    - Smart urgency detection (amber badge when action needed)
    - Fixed formatting (no more "2e+01%" bugs)
 
-2. **📊 Executive Analysis Tab** (Strategic Deep Dive):
+2. **Executive Analysis Tab** (Strategic Deep Dive):
 
    - Comprehensive strategic analysis
    - Key findings with data-backed insights
@@ -34,23 +34,23 @@ A comprehensive fuel surcharge competitive intelligence platform for UPS, featur
    - Auto-retry logic to prevent fallback data
    - Executive-ready presentation
 
-3. **💡 Rate Recommendations Tab** (AI-Powered Pricing):
+3. **Rate Recommendations Tab** (AI-Powered Pricing):
    - **5-10 intelligent suggestions** with full context
    - **Beautiful card layout** - easy to scan, no more accordion
    - Four recommendation types with color coding:
-     - 📈 Rate Adjustment (blue) - optimize existing rates
-     - ➕ New Offering (emerald) - fill market gaps
-     - 🎯 Competitive Response (purple) - react to moves
-     - 🛡️ Defensive Move (orange) - protect position
+     - Rate Adjustment (blue) - optimize existing rates
+     - New Offering (emerald) - fill market gaps
+     - Competitive Response (purple) - react to moves
+     - Defensive Move (orange) - protect position
    - **Clear visual hierarchy**:
      - Large badges for current → suggested rates
      - Competitor rates in small chips
      - AI reasoning in readable boxes
-     - Impact analysis with icons (💰 Revenue, 🏆 Position, 📊 History)
+     - Impact analysis with dedicated sections for revenue, competitive position, and historical context
    - Historical data integration
    - All recommendations visible at once
 
-**ℹ️ Contextual Help Tooltips**:
+**Contextual Help Tooltips**:
 
 - Info icons (ⓘ) on each tab card
 - Natural language explanations
@@ -67,7 +67,7 @@ A comprehensive fuel surcharge competitive intelligence platform for UPS, featur
 - Conversation memory for natural dialogue
 - Query intelligence with automatic data fetching
 
-**⚙️ Parallel AI Processing**:
+**Parallel AI Processing**:
 
 - All three AI insights generate simultaneously
 - Independent loading states per tab
@@ -129,7 +129,7 @@ ReFuel/
 - Recharts
 - Radix UI
 
-## 📦 Installation
+## Installation
 
 ### Backend Setup
 
@@ -176,7 +176,7 @@ SMTP_PASSWORD=your_app_password
 
 **Note**: The Watsonx IAM token expires every 24 hours and is automatically refreshed by the token manager.
 
-## 🚀 Running the Application
+## Running the Application
 
 ### Quick Start (Recommended)
 
@@ -226,7 +226,7 @@ lsof -ti:8000 | xargs kill -9
 pkill -f "vite"
 ```
 
-## 📊 API Endpoints
+## API Endpoints
 
 ### Scraper
 
@@ -297,7 +297,7 @@ Three dynamic cards showing:
 2. **Opportunities**: AI-identified competitive gaps and optimization areas
 3. **Recommendations**: Strategic recommendations based on current data
 
-## 🎨 UI Features
+## UI Features
 
 - **Welcome Dashboard**: Time-aware greeting with last update status and live data indicator
 - **Executive Analysis Card**: Comprehensive AI analysis with color-coded sections
@@ -337,9 +337,9 @@ The scraper uses Selenium with advanced stealth techniques:
 
 **Supported Carriers:**
 
-- ✅ **UPS Ground**: Direct scraping from official fuel surcharge page
-- ✅ **FedEx Ground**: Handles accordion UI and dynamic content
-- ✅ **DHL Road**: Scrapes German site with proper table identification
+- UPS Ground: Direct scraping from official fuel surcharge page
+- FedEx Ground: Handles accordion UI and dynamic content
+- DHL Road: Scrapes German site with proper table identification
 
 **Data Accuracy:**
 
@@ -347,7 +347,7 @@ The scraper uses Selenium with advanced stealth techniques:
 - All data is validated and cleaned before storage
 - Each scrape session is tracked with metadata
 
-## 📈 Comparison Views
+## Comparison Views
 
 1. **Overlap View**: Only ranges where all 3 carriers have data - perfect for direct comparison
 2. **Comparable Ranges**: Intelligent grouping of overlapping ranges where at least 2 carriers have data - shows intersection ranges for meaningful comparison
@@ -374,7 +374,7 @@ Powered by IBM Watsonx REST API (Llama 3.3 70B):
 - [ ] Advanced trend predictions
 - [ ] Multi-user authentication
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Backend Issues
 

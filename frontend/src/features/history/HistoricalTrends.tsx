@@ -102,10 +102,10 @@ export default function HistoricalTrends() {
 						<Line
 							type="monotone"
 							dataKey="FedEx"
-							stroke="#10B981"
+							stroke="#8B5CF6"
 							strokeWidth={2}
 							strokeDasharray="5 5"
-							dot={{ fill: "#10B981", r: 4 }}
+							dot={{ fill: "#8B5CF6", r: 4 }}
 						/>
 						<Line
 							type="monotone"

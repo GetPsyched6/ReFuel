@@ -39,6 +39,7 @@ interface RateRecommendationsData {
 		generated_at: string;
 		total_recommendations: number;
 		note?: string;
+		_is_fallback?: boolean;
 	};
 }
 
@@ -109,11 +110,11 @@ const RateRecommendations: React.FC<RateRecommendationsProps> = ({
 				{[1, 2, 3, 4, 5].map((i) => (
 					<div
 						key={i}
-						className="h-48 bg-gradient-to-r from-emerald-50/50 via-blue-50/50 to-emerald-50/50 dark:from-emerald-900/20 dark:via-blue-900/20 dark:to-emerald-900/20 rounded-xl animate-pulse"
+						className="h-48 bg-gradient-to-r from-emerald-200/80 via-blue-200/80 to-emerald-200/80 dark:from-emerald-900/20 dark:via-blue-900/20 dark:to-emerald-900/20 rounded-xl animate-pulse"
 					/>
 				))}
-				<p className="text-center text-sm text-emerald-600 dark:text-emerald-400 animate-pulse">
-					🤖 AI generating intelligent rate recommendations...
+				<p className="text-center text-sm font-bold text-emerald-700 dark:text-emerald-400 animate-pulse">
+					AI is generating intelligent rate recommendations...
 				</p>
 			</div>
 		);
@@ -146,7 +147,13 @@ const RateRecommendations: React.FC<RateRecommendationsProps> = ({
 	}
 
 	return (
-		<div className="space-y-3 animate-in fade-in duration-500">
+		<div className="space-y-3 animate-in fade-in duration-500 relative">
+			{data.metadata?._is_fallback && (
+				<div
+					className="absolute top-0 right-0 w-2 h-2 bg-amber-500 rounded-full"
+					title="Using fallback data"
+				></div>
+			)}
 			<div className="flex items-center justify-between mb-1">
 				<p className="text-sm text-gray-600 dark:text-gray-400">
 					{data.recommendations.length} AI-powered recommendations

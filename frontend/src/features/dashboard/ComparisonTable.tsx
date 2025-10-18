@@ -23,6 +23,7 @@ export default function ComparisonTable({
 }) {
 	const [data, setData] = useState<ComparisonRow[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [chartOrTable, setChartOrTable] = useState<"chart" | "table">("chart");
 
 	useEffect(() => {
 		loadData();
@@ -54,7 +55,11 @@ export default function ComparisonTable({
 				Fuel Surcharge Comparison
 			</h2>
 
-			<Tabs.Root defaultValue="chart" className="w-full">
+			<Tabs.Root
+				value={chartOrTable}
+				onValueChange={(v) => setChartOrTable(v as "chart" | "table")}
+				className="w-full"
+			>
 				<Tabs.List className="flex gap-2 p-1 rounded-xl glass dark:glass-dark mb-6">
 					<Tabs.Trigger
 						value="chart"

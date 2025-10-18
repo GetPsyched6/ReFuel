@@ -9,6 +9,7 @@ import {
 	Loader2,
 	ChevronDown,
 	ChevronUp,
+	AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -16,17 +17,34 @@ export default function ScrapeNow({ onSuccess }: { onSuccess?: () => void }) {
 	const [loading, setLoading] = useState(false);
 	const [result, setResult] = useState<any>(null);
 	const [expanded, setExpanded] = useState(false);
+	const [duplicateAlert, setDuplicateAlert] = useState(false);
 
 	const handleScrape = async () => {
 		setLoading(true);
 		setResult(null);
+		setDuplicateAlert(false);
 
 		try {
 			const response = await scraperApi.triggerScrape();
 			setResult(response.data);
-			setExpanded(true);
-			if (response.data.status === "success" && onSuccess) {
-				onSuccess();
+
+			// Check if it's a duplicate
+			if (
+				response.data.status === "success" &&
+				!response.data.session_id &&
+				response.data.error
+			) {
+				setDuplicateAlert(true);
+				setExpanded(false);
+				// Auto-dismiss after 4 seconds
+				setTimeout(() => {
+					setDuplicateAlert(false);
+				}, 4000);
+			} else {
+				setExpanded(true);
+				if (response.data.status === "success" && onSuccess) {
+					onSuccess();
+				}
 			}
 		} catch (error: any) {
 			setResult({
@@ -69,7 +87,26 @@ export default function ScrapeNow({ onSuccess }: { onSuccess?: () => void }) {
 			</div>
 
 			<AnimatePresence>
-				{result && (
+				{duplicateAlert && (
+					<motion.div
+						initial={{ height: 0, opacity: 0, y: -10 }}
+						animate={{ height: "auto", opacity: 1, y: 0 }}
+						exit={{ height: 0, opacity: 0, y: -10 }}
+						className="mt-4 overflow-hidden"
+					>
+						<div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 flex items-start gap-3">
+							<AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+							<p className="text-blue-700 dark:text-blue-300 text-sm">
+								{result?.error ||
+									"Data unchanged from last scrape. Skipped to prevent duplicates."}
+							</p>
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			<AnimatePresence>
+				{result && !duplicateAlert && (
 					<motion.div
 						initial={{ height: 0, opacity: 0 }}
 						animate={{ height: "auto", opacity: 1 }}

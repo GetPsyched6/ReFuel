@@ -77,7 +77,7 @@ export default function Chatbot({ onClose }: { onClose: () => void }) {
 			{/* Header */}
 			<div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gradient-ups text-white rounded-t-2xl">
 				<div>
-					<h3 className="font-semibold">AI Assistant</h3>
+					<h3 className="font-semibold">UPS Surcharge Assistant</h3>
 					<p className="text-xs opacity-80">Ask about fuel surcharges</p>
 				</div>
 				<button

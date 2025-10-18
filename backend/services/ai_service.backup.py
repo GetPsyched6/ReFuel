@@ -33,12 +33,7 @@ def parse_ai_json_response(text: str) -> Optional[Dict]:
         if code_block_match:
             json_str = code_block_match.group(1).strip()
     
-    # Strategy 2: Add opening brace if AI started with a field name (e.g., "competitive_gaps": ...)
-    if not json_str.startswith("{") and json_str.startswith('"'):
-        print(f"DEBUG: AI response missing opening brace, adding it")
-        json_str = "{" + json_str
-    
-    # Strategy 3: Extract JSON if surrounded by text
+    # Strategy 2: Extract JSON if surrounded by text
     if not json_str.startswith("{"):
         start_idx = json_str.find("{")
         if start_idx != -1:
@@ -531,18 +526,11 @@ ASSISTANT:"""
                     'service': row['service']
                 })
             
-            # Get historical session for week-over-week comparison (by timestamp!)
-            current_ts = await db.execute_query(
-                "SELECT timestamp FROM scrape_sessions WHERE id = ?",
+            # Get historical session for week-over-week comparison
+            prev_sessions = await db.execute_query(
+                "SELECT id, timestamp FROM scrape_sessions WHERE id < ? ORDER BY timestamp DESC LIMIT 1",
                 (session_id,)
             )
-            
-            prev_sessions = []
-            if current_ts:
-                prev_sessions = await db.execute_query(
-                    "SELECT id, timestamp FROM scrape_sessions WHERE timestamp < ? ORDER BY timestamp DESC LIMIT 1",
-                    (current_ts[0]['timestamp'],)
-                )
             
             historical_context = ""
             if prev_sessions:
@@ -628,7 +616,7 @@ Return ONLY valid JSON:
     "SPECIFIC risk: e.g., 'DHL charges 10-15% for $1.18-$2.50 range vs our 18.5-19.5% - risk of 15-20% volume loss in this segment'",
     "Another risk with numbers and market implications"
   ],
-  "trend_commentary": "MUST cite specific carriers and data. If changes detected above, analyze them (carrier X increased range Y by Z%). If no changes, state 'No week-over-week changes detected' then analyze UPS's current competitive positioning vs FedEx and DHL using SPECIFIC ranges and percentages."
+  "trend_commentary": "Analysis of week-over-week changes with SPECIFIC carriers, ranges, and percentage movements. If no changes, analyze current competitive positioning."
 }}
 
 CRITICAL RULES:
@@ -652,8 +640,7 @@ Start with {{:
                         "session_id": session_id,
                         "carriers_analyzed": list(carriers_full.keys()),
                         "total_ranges": sum(len(carriers_full[c]) for c in carriers_full),
-                        "generated_at": datetime.now().isoformat(),
-                        "_is_fallback": False
+                        "generated_at": datetime.now().isoformat()
                     }
                 }
             
@@ -689,8 +676,7 @@ Start with {{:
             "metadata": {
                 "session_id": session_id,
                 "generated_at": datetime.now().isoformat(),
-                "note": "Fallback analysis - AI analysis unavailable",
-                "_is_fallback": True
+                "note": "Fallback analysis - AI analysis unavailable"
             }
         }
     
@@ -735,18 +721,11 @@ Start with {{:
                     'pct': row['surcharge_pct']
                 })
             
-            # Get previous session for DETAILED comparison (by timestamp, not ID!)
-            current_timestamp = await db.execute_query(
-                "SELECT timestamp FROM scrape_sessions WHERE id = ?",
+            # Get previous session for DETAILED comparison
+            prev_sessions = await db.execute_query(
+                "SELECT id FROM scrape_sessions WHERE id < ? ORDER BY timestamp DESC LIMIT 1",
                 (session_id,)
             )
-            
-            prev_sessions = []
-            if current_timestamp:
-                prev_sessions = await db.execute_query(
-                    "SELECT id FROM scrape_sessions WHERE timestamp < ? ORDER BY timestamp DESC LIMIT 1",
-                    (current_timestamp[0]['timestamp'],)
-                )
             
             # Calculate detailed changes
             detailed_changes = []
@@ -791,24 +770,11 @@ Start with {{:
                                             'change': diff
                                         })
                 
-                print(f"DEBUG Quick Insights: Comparing session {session_id} vs {prev_id}")
-                print(f"DEBUG: Found {len(detailed_changes)} changes with threshold 0.1%")
-                if detailed_changes:
-                    print(f"DEBUG: Top changes: {detailed_changes[:3]}")
-                
                 if detailed_changes:
                     changes_text = []
-                    # Group changes by carrier to ensure all carriers are represented
-                    changes_by_carrier = {'UPS': [], 'FedEx': [], 'DHL': []}
-                    for ch in detailed_changes:
-                        changes_by_carrier[ch['carrier']].append(ch)
-                    
-                    # Take top 3 from each carrier
-                    for carrier in ['UPS', 'FedEx', 'DHL']:
-                        for ch in changes_by_carrier[carrier][:3]:
-                            changes_text.append(f"{ch['carrier']} {ch['range']}: {ch['from']:.2f}% → {ch['to']:.2f}% ({ch['change']:+.2f}%)")
-                    
-                    historical_context = "\n\nDETAILED WEEK-OVER-WEEK CHANGES (by carrier):\n" + "\n".join(changes_text) if changes_text else "\nNo changes detected this week"
+                    for ch in detailed_changes[:10]:  # Top 10 changes
+                        changes_text.append(f"{ch['carrier']} {ch['range']}: {ch['from']:.2f}% → {ch['to']:.2f}% ({ch['change']:+.2f}%)")
+                    historical_context = "\n\nDETAILED WEEK-OVER-WEEK CHANGES:\n" + "\n".join(changes_text)
             
             # Calculate competitive gaps
             carrier_summaries = {}
@@ -822,152 +788,56 @@ Start with {{:
                     'ranges': [i['range'] for i in items[:5]]  # First 5 ranges
                 }
             
-            # Find overlapping ranges for meaningful comparison
-            ups_ranges = current_by_carrier.get('UPS', [])
-            fedex_ranges = current_by_carrier.get('FedEx', [])
-            dhl_ranges = current_by_carrier.get('DHL', [])
-            
-            # Build comparison data showing where ranges overlap
-            overlap_info = []
-            if ups_ranges:
-                for ups_item in ups_ranges:  # Check ALL UPS ranges
-                    ups_range = ups_item['range']
-                    ups_pct = ups_item['pct']
-                    
-                    # Find FedEx overlap
-                    fedex_match = next((f for f in fedex_ranges if f['range'] == ups_range), None)
-                    dhl_match = next((d for d in dhl_ranges if d['range'] == ups_range), None)
-                    
-                    if fedex_match or dhl_match:
-                        overlap_info.append({
-                            'range': ups_range,
-                            'ups': ups_pct,
-                            'fedex': fedex_match['pct'] if fedex_match else None,
-                            'dhl': dhl_match['pct'] if dhl_match else None
-                        })
-            
-            # Show ONLY overlaps with FedEx (most important competitor)
-            fedex_overlaps = [o for o in overlap_info if o.get('fedex') is not None]
-            
-            if fedex_overlaps:
-                overlap_text = "\n".join([
-                    f"Range {o['range']}: UPS {o['ups']:.2f}% vs FedEx {o['fedex']:.2f}%"
-                    for o in fedex_overlaps[:3]  # Show first 3 FedEx overlaps
-                ])
-            else:
-                overlap_text = "No overlapping ranges with FedEx"
-            
-            prompt = f"""You are a pricing strategist analyzing UPS fuel surcharge competitive positioning.
+            prompt = f"""You are a competitive pricing analyst for UPS. Analyze this detailed fuel surcharge data.
 
-CURRENT ENTRY RATES:
-- UPS: {ups_ranges[0]['pct']:.2f}% at {ups_ranges[0]['range']}
-- FedEx: {fedex_ranges[0]['pct']:.2f}% at {fedex_ranges[0]['range']}
-- DHL: {dhl_ranges[0]['pct']:.2f}% at {dhl_ranges[0]['range']}
+CURRENT DATA SUMMARY:
+{json.dumps(carrier_summaries, indent=2)}
+{historical_context}
 
-OVERLAPPING RANGES (where all carriers compete):
-{overlap_text}
-
-WEEK-OVER-WEEK CHANGES:
-{historical_context if historical_context else "No changes this week"}
-
-Return JSON with ACTIONABLE INSIGHTS:
-
+Return ONLY valid JSON:
 {{
-  "competitive_gaps": "ONE strategic insight. Example: 'In overlapping ranges ($3.01-$3.64), UPS matches FedEx exactly - competitive parity maintained' OR 'UPS entry 1% below FedEx but 8.5% above DHL - balanced positioning'",
-  
-  "urgent_actions": "{"SPECIFIC action. Example: 'UPS raised 3 rates - monitor customer response to gauge pricing power' OR 'FedEx/DHL both increased - market accepting higher rates, UPS can follow'" if detailed_changes else "No market moves - hold current pricing and monitor"}",
-  
-  "trend_summary": "{"BUSINESS MEANING. Example: 'Widespread increases signal strong market - UPS has pricing power' OR 'Mixed signals (some up, some down) - wait for clearer trend'" if detailed_changes else "Stable market - current rates appear accepted"}"
+  "competitive_gaps": "Detailed statement showing SPECIFIC ranges where UPS is higher/lower. e.g., 'UPS $1.93-$2.20 at 18.5% vs DHL $1.93-$2.20 at 16.25% - UPS is 2.25% higher in this segment'",
+  "urgent_actions": "Most critical change requiring action (cite SPECIFIC ranges and percentages) or 'No significant changes detected' if changes < 0.5%",
+  "trend_summary": "Summary of week-over-week changes with SPECIFIC carriers and percentage movements, or 'No previous session for comparison' if first time"
 }}
 
 CRITICAL:
-- Check overlapping ranges FIRST for accurate comparison
-- NO made-up revenue figures
-- NO calling anyone "market leader"  
-- Be factually accurate (check if rates actually differ)
-- Keep it SHORT and ACTIONABLE
+- Use ACTUAL price ranges and percentages from the data
+- Format percentages as "20.50%" NOT "2e+01%"
+- Be specific: mention carrier names, dollar ranges, exact percentages
+- If changes detected, MUST cite them specifically
+- If no changes > 0.1%, say so explicitly
 
 Start with {{:
 {{"""
             
             response_text = await self._call_watsonx(prompt, max_tokens=500, temperature=0.3)
-            print(f"DEBUG Quick Insights AI raw response: {response_text[:400]}...")
             parsed = parse_ai_json_response(response_text)
-            print(f"DEBUG Quick Insights parsed result: {parsed is not None}")
             
             if parsed:
-                parsed['_is_fallback'] = False
                 return parsed
             
-            print(f"⚠️ Quick Insights JSON parsing failed - using fallback")
+            # Enhanced fallback
+            ups_avg = carrier_summaries.get('UPS', {}).get('avg', 0)
+            fedex_avg = carrier_summaries.get('FedEx', {}).get('avg', 0)
+            dhl_avg = carrier_summaries.get('DHL', {}).get('avg', 0)
             
-            # Enhanced fallback with actual data
-            ups_data = current_by_carrier.get('UPS', [])
-            fedex_data = current_by_carrier.get('FedEx', [])
-            dhl_data = current_by_carrier.get('DHL', [])
+            gaps_text = f"UPS averages {ups_avg:.2f}% vs FedEx {fedex_avg:.2f}% and DHL {dhl_avg:.2f}%. "
+            if ups_avg > fedex_avg:
+                gaps_text += f"UPS is {(ups_avg - fedex_avg):.2f}% higher than FedEx. "
+            if ups_avg > dhl_avg:
+                gaps_text += f"UPS is {(ups_avg - dhl_avg):.2f}% higher than DHL."
             
-            # Build ACTIONABLE competitive gaps comparison
-            if ups_data and fedex_data and dhl_data:
-                ups_pct = ups_data[0]['pct']
-                fedex_pct = fedex_data[0]['pct']
-                dhl_pct = dhl_data[0]['pct']
-                
-                # Check for overlapping ranges first
-                overlap_matches = [o for o in overlap_info if o.get('fedex') is not None]
-                
-                if overlap_matches:
-                    # Compare in overlapping ranges
-                    sample = overlap_matches[0]
-                    if abs(sample['ups'] - sample['fedex']) < 0.01:
-                        gaps_text = f"In overlapping ranges, UPS matches FedEx exactly ({sample['ups']:.2f}%) - competitive parity maintained. Strong positioning."
-                    elif sample['ups'] < sample['fedex']:
-                        diff = sample['fedex'] - sample['ups']
-                        gaps_text = f"In overlapping ranges, UPS {diff:.2f}% below FedEx - opportunity to raise rates and improve margins."
-                    else:
-                        diff = sample['ups'] - sample['fedex']
-                        gaps_text = f"In overlapping ranges, UPS {diff:.2f}% above FedEx - monitor for customer price sensitivity."
-                else:
-                    # Compare entry points (different ranges)
-                    if abs(ups_pct - fedex_pct) < 0.01:
-                        gaps_text = f"UPS entry rate matches FedEx at {ups_pct:.2f}% (different price ranges). DHL {dhl_pct:.2f}% significantly lower."
-                    elif ups_pct < fedex_pct:
-                        diff = fedex_pct - ups_pct
-                        gaps_text = f"UPS entry {diff:.2f}% below FedEx ({fedex_pct:.2f}%) - potential margin opportunity in lower tiers."
-                    else:
-                        diff = ups_pct - fedex_pct
-                        gaps_text = f"UPS entry {diff:.2f}% above FedEx ({fedex_pct:.2f}%) - pricing premium in lower tiers."
-            else:
-                gaps_text = "Unable to compare rates - missing competitor data."
-            
+            trend_text = "Current rates available for analysis."
             if detailed_changes:
-                # Group changes by direction
-                ups_changes = [c for c in detailed_changes if c['carrier'] == 'UPS']
-                comp_changes = [c for c in detailed_changes if c['carrier'] in ['FedEx', 'DHL']]
-                
-                if ups_changes:
-                    urgent_text = f"UPS adjusted {len(ups_changes)} rates this week. Review if changes align with competitive strategy."
-                elif comp_changes:
-                    urgent_text = f"Competitors changed rates ({len(comp_changes)} changes across FedEx/DHL). Evaluate if UPS should respond to maintain competitive position."
-                else:
-                    urgent_text = f"{len(detailed_changes)} market changes detected. Analyze for strategic implications."
-                
-                # Identify trend
-                increases = [c for c in detailed_changes if c['change'] > 0]
-                if len(increases) > len(detailed_changes) * 0.6:
-                    trend_text = "Market trend shows rate increases - carriers testing higher pricing. UPS may have room to raise rates."
-                elif len(increases) < len(detailed_changes) * 0.4:
-                    trend_text = "Market trend shows rate decreases - competitive pressure building. UPS should evaluate pricing strategy."
-                else:
-                    trend_text = "Mixed rate changes across carriers - market in flux. Monitor closely before making moves."
-            else:
-                urgent_text = "No rate changes this week - stable market. Good opportunity to analyze if UPS rates are optimally positioned."
-                trend_text = "Stable pricing week. Use this time to review competitive positioning and identify optimization opportunities."
+                change_count = len(detailed_changes)
+                avg_change = sum(abs(c['change']) for c in detailed_changes) / len(detailed_changes)
+                trend_text = f"Detected {change_count} rate changes averaging {avg_change:.2f}% difference week-over-week."
             
             return {
                 "competitive_gaps": gaps_text,
-                "urgent_actions": urgent_text,
-                "trend_summary": trend_text,
-                "_is_fallback": True
+                "urgent_actions": "Continue monitoring competitor rates" if not detailed_changes else f"{len(detailed_changes)} rates changed this week - review for strategic response",
+                "trend_summary": trend_text
             }
             
         except Exception as e:
@@ -1062,18 +932,11 @@ Start with {{:
                     'competitors': competitor_summary
                 })
             
-            # Get historical context (by timestamp!)
-            curr_ts = await db.execute_query(
-                "SELECT timestamp FROM scrape_sessions WHERE id = ?",
+            # Get historical context
+            hist_sessions = await db.execute_query(
+                "SELECT id FROM scrape_sessions WHERE id < ? ORDER BY timestamp DESC LIMIT 1",
                 (session_id,)
             )
-            
-            hist_sessions = []
-            if curr_ts:
-                hist_sessions = await db.execute_query(
-                    "SELECT id FROM scrape_sessions WHERE timestamp < ? ORDER BY timestamp DESC LIMIT 1",
-                    (curr_ts[0]['timestamp'],)
-                )
             
             historical_context = ""
             if hist_sessions:
@@ -1097,22 +960,17 @@ Start with {{:
                         historical_context = "\n\nUPS WEEK-OVER-WEEK CHANGES:\n" + "\n".join(changes)
             
             # Build comprehensive prompt
-            ups_range_list = ", ".join([f"${r['min']:.2f}-${r['max']:.2f}" for r in ups_ranges])
-            
-            prompt = f"""You are a senior pricing strategist for UPS. Generate 5-7 rate recommendations.
+            prompt = f"""You are a senior pricing strategist for UPS. Generate 5-7 SPECIFIC rate recommendations based on this COMPLETE data.
 
-UPS'S ACTUAL PRICE RANGES (ONLY THESE {len(ups_ranges)} RANGES EXIST):
-{ups_range_list}
-
-FULL DATA WITH COMPETITORS:
+UPS CURRENT RATES (ALL {len(ups_with_competitors)} RANGES):
 {json.dumps(ups_with_competitors, indent=2)}
 {historical_context}
 
-MANDATORY RULES - READ CAREFULLY:
-1. You can ONLY suggest adjustments to the {len(ups_ranges)} UPS ranges listed at the top
-2. DO NOT invent ranges UPS doesn't have (like $1.45-$1.48 if not in list)
-3. EXCEPTION: type="new_offering" if suggesting UPS ADD a new range
-4. Every recommendation MUST match an actual UPS range from the list OR be type="new_offering"
+CRITICAL CONSTRAINTS:
+- ONLY recommend adjustments to UPS's EXISTING price ranges shown above
+- EXCEPTION: You MAY suggest new price range offerings if there's a competitive gap
+- EVERY recommendation MUST reference actual UPS ranges from the data above
+- DO NOT suggest ranges like $1.45-$1.48 if UPS doesn't offer that range!
 
 Return ONLY valid JSON:
 {{
@@ -1135,15 +993,15 @@ Return ONLY valid JSON:
 }}
 
 QUALITY STANDARDS:
-- reasoning: 40-60 words with specific calculations, clear trade-offs, and actionable insight
-- revenue_impact: 20-30 words - explain revenue trade-off with rough $ impact or % change
-- competitive_position: 20-30 words - explain positioning change with specific competitor comparison
-- historical_context: 15-25 words - cite actual changes from previous week if relevant
+- reasoning: 50+ words with specific calculations
+- revenue_impact: NOT "strategic_trade_off" - actual detailed explanation
+- competitive_position: NOT "closes_gap" - explain HOW and by HOW MUCH
+- historical_context: NOT generic - cite actual changes if any
 
 Generate 5-7 HIGH-IMPACT recommendations. Start with {{:
 {{"""
             
-            response_text = await self._call_watsonx(prompt, max_tokens=3000, temperature=0.4)
+            response_text = await self._call_watsonx(prompt, max_tokens=2500, temperature=0.4)
             parsed = parse_ai_json_response(response_text)
             
             if parsed and "recommendations" in parsed:
@@ -1170,22 +1028,17 @@ Generate 5-7 HIGH-IMPACT recommendations. Start with {{:
                         "session_id": session_id,
                         "generated_at": datetime.now().isoformat(),
                         "total_recommendations": len(valid_recommendations),
-                        "ups_ranges_analyzed": len(ups_ranges),
-                        "_is_fallback": False
+                        "ups_ranges_analyzed": len(ups_ranges)
                     }
                 }
             
             print(f"⚠️ Rate recommendations JSON parsing failed")
-            print(f"Raw AI response: {response_text[:500]}...")
-            
-            # Return empty but valid structure
             return {
                 "recommendations": [],
                 "metadata": {
                     "session_id": session_id,
                     "generated_at": datetime.now().isoformat(),
-                    "note": "AI response could not be parsed - please try again",
-                    "_is_fallback": True
+                    "note": "Unable to generate recommendations"
                 }
             }
             
@@ -1195,7 +1048,7 @@ Generate 5-7 HIGH-IMPACT recommendations. Start with {{:
             traceback.print_exc()
             return {
                 "recommendations": [],
-                "metadata": {"note": f"Error: {str(e)}", "_is_fallback": True}
+                "metadata": {"note": f"Error: {str(e)}"}
             }
 
 

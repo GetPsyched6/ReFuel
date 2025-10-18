@@ -185,6 +185,91 @@ class ScraperService:
         """
         return await db.execute_query(query, (session_id,))
     
+    async def is_duplicate_data(self, new_data: List[FuelSurchargeData]) -> bool:
+        """
+        Check if new data is identical to the latest session data.
+        Returns True if duplicate, False if different or first session.
+        """
+        # Get latest session
+        latest = await self.get_latest_session()
+        if not latest:
+            return False  # First session, not a duplicate
+        
+        # Get latest session data
+        latest_data = await self.get_session_data(latest['id'])
+        
+        # Check if row counts match
+        if len(new_data) != len(latest_data):
+            return False  # Different count = different data
+        
+        # Sort both datasets for comparison
+        new_sorted = sorted([
+            (d.carrier.value, d.at_least_usd, d.but_less_than_usd, d.surcharge_pct)
+            for d in new_data
+        ])
+        
+        latest_sorted = sorted([
+            (d['carrier'], d['at_least_usd'], d['but_less_than_usd'], d['surcharge_pct'])
+            for d in latest_data
+        ])
+        
+        # Compare each row
+        for new_row, latest_row in zip(new_sorted, latest_sorted):
+            new_carrier, new_min, new_max, new_pct = new_row
+            latest_carrier, latest_min, latest_max, latest_pct = latest_row
+            
+            # Check all fields match
+            if (new_carrier != latest_carrier or 
+                abs(new_min - latest_min) > 0.01 or 
+                abs(new_max - latest_max) > 0.01 or 
+                abs(new_pct - latest_pct) > 0.01):
+                return False  # Found a difference
+        
+        return True  # All rows match = duplicate
+    
+    async def cleanup_old_sessions(self, keep_count: int = 1) -> int:
+        """
+        Delete all but the most recent N sessions.
+        
+        Args:
+            keep_count: Number of most recent sessions to keep (default 1)
+            
+        Returns:
+            Number of sessions deleted
+        """
+        # Get sessions to keep
+        query = """
+            SELECT id FROM scrape_sessions 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        """
+        keep_sessions = await db.execute_query(query, (keep_count,))
+        keep_ids = [s['id'] for s in keep_sessions]
+        
+        if not keep_ids:
+            return 0
+        
+        # Delete older sessions
+        placeholders = ','.join('?' * len(keep_ids))
+        delete_query = f"""
+            DELETE FROM scrape_sessions 
+            WHERE id NOT IN ({placeholders})
+        """
+        
+        # Get count before delete
+        count_query = f"""
+            SELECT COUNT(*) as count FROM scrape_sessions 
+            WHERE id NOT IN ({placeholders})
+        """
+        count_result = await db.execute_query(count_query, tuple(keep_ids))
+        deleted_count = count_result[0]['count'] if count_result else 0
+        
+        # Execute delete
+        if deleted_count > 0:
+            await db.execute_write(delete_query, tuple(keep_ids))
+        
+        return deleted_count
+    
     async def check_data_changes(self, new_session_id: int) -> Dict:
         """Compare new session data with previous session"""
         # Get previous session

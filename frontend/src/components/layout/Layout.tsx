@@ -18,7 +18,6 @@ export default function Layout({
 	const formatLastUpdate = (timestamp?: string) => {
 		if (!timestamp) return "No recent updates";
 
-		// SQLite returns UTC timestamps without 'Z', so we need to append it
 		const date = new Date(
 			timestamp.includes("Z") ? timestamp : timestamp + "Z"
 		);
@@ -39,16 +38,55 @@ export default function Layout({
 		return date.toLocaleDateString();
 	};
 
+	const formatDuration = (ms: number) => {
+		if (ms <= 0) return "0 minutes";
+		const days = Math.floor(ms / 86400000);
+		const hours = Math.floor((ms % 86400000) / 3600000);
+		const minutes = Math.floor((ms % 3600000) / 60000);
+		const parts: string[] = [];
+		if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+		if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
+		if (minutes > 0 && parts.length < 2)
+			parts.push(`${minutes} minute${minutes !== 1 ? "s" : ""}`);
+		return parts.length > 0 ? parts.join(" ") : "less than a minute";
+	};
+
+	const getWeeklyProgress = () => {
+		const now = new Date();
+		const currentDay = now.getDay();
+		const diffToMonday = (currentDay + 6) % 7;
+		const start = new Date(now);
+		start.setHours(0, 0, 0, 0);
+		start.setDate(now.getDate() - diffToMonday);
+		const end = new Date(start);
+		end.setDate(start.getDate() + 7);
+		const total = end.getTime() - start.getTime();
+		const elapsed = Math.min(
+			Math.max(now.getTime() - start.getTime(), 0),
+			total
+		);
+		const remaining = Math.max(end.getTime() - now.getTime(), 0);
+		const percent = Math.min(Math.max((elapsed / total) * 100, 0), 100);
+		return {
+			percent,
+			elapsedLabel: formatDuration(elapsed),
+			remainingLabel: formatDuration(remaining),
+		};
+	};
+
+	const weekProgress = getWeeklyProgress();
+
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
 			{/* Header */}
 			<header className="sticky top-0 z-50 glass dark:glass-dark">
-				<div className="container mx-auto px-4 py-4">
+				<div className="container mx-auto px-4 py-2">
 					<div className="flex items-center justify-between gap-4">
+						{/* LEFT: Logo */}
 						<motion.div
 							initial={{ opacity: 0, x: -20 }}
 							animate={{ opacity: 1, x: 0 }}
-							className="flex items-center gap-3"
+							className="flex items-center gap-3 flex-shrink-0"
 						>
 							<div className="w-10 h-10 rounded-lg gradient-ups flex items-center justify-center text-white font-bold">
 								RF
@@ -63,7 +101,32 @@ export default function Layout({
 							</div>
 						</motion.div>
 
-						<div className="flex items-center gap-3">
+						{/* CENTER: Progress Bar */}
+						<motion.div
+							initial={{ opacity: 0, y: -10 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ delay: 0.05 }}
+							className="hidden lg:flex flex-col gap-1.5 px-4 py-2 rounded-lg glass dark:glass-dark w-full max-w-md mx-auto"
+						>
+							<div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+								<span>Next Scrape</span>
+								<span className="font-semibold text-gray-700 dark:text-gray-200">
+									{weekProgress.elapsedLabel} elapsed
+								</span>
+							</div>
+							<div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+								<div
+									className="h-full bg-gradient-to-r from-blue-500 via-blue-400 to-purple-500 dark:from-blue-400 dark:via-blue-300 dark:to-purple-400 transition-all duration-500"
+									style={{ width: `${weekProgress.percent}%` }}
+								></div>
+							</div>
+							<p className="text-[10px] text-gray-500 dark:text-gray-400">
+								Next scrape (every Monday) in {weekProgress.remainingLabel}
+							</p>
+						</motion.div>
+
+						{/* RIGHT: Last Update + Status Badge */}
+						<div className="flex items-center gap-3 flex-shrink-0">
 							{/* Last Update Time */}
 							<motion.div
 								initial={{ opacity: 0, x: 20 }}

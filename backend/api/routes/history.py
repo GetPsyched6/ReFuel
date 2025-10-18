@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from models.database import db
-from models.schemas import CarrierEnum
+from models.schemas import CarrierEnum, FuelSurchargeResponse
 
 router = APIRouter()
 
@@ -38,6 +38,36 @@ async def get_all_sessions():
         session['carriers_scraped'] = json.loads(session['carriers_scraped'])
     
     return sessions
+
+
+@router.get("/sessions/{session_id}/details")
+async def get_session_details(session_id: int):
+    """Get detailed carrier tables for a single session"""
+    query = """
+        SELECT id, carrier, at_least_usd, but_less_than_usd, surcharge_pct, service
+        FROM fuel_surcharges
+        WHERE session_id = ?
+        ORDER BY carrier, at_least_usd
+    """
+
+    rows = await db.execute_query(query, (session_id,))
+
+    grouped = {
+        "UPS": [],
+        "FedEx": [],
+        "DHL": []
+    }
+
+    for row in rows:
+        grouped[row["carrier"]].append({
+            "id": row["id"],
+            "at_least_usd": row["at_least_usd"],
+            "but_less_than_usd": row["but_less_than_usd"],
+            "surcharge_pct": row["surcharge_pct"],
+            "service": row["service"],
+        })
+
+    return grouped
 
 
 @router.get("/trends")

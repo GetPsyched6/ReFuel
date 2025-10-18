@@ -42,6 +42,9 @@ export const comparisonApi = {
 export const historyApi = {
 	getSessions: () => api.get("/history/sessions"),
 
+	getSessionDetails: (sessionId: number) =>
+		api.get(`/history/sessions/${sessionId}/details`),
+
 	getTrends: (carriers?: string[], days = 30) =>
 		api.get("/history/trends", {
 			params: { carriers, days },

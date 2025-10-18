@@ -14,14 +14,14 @@ from models.database import db
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     await db.init_schema()
-    print("✅ Database initialized")
+    print("Database initialized")
     
     yield
     
     # Shutdown
-    print("👋 Shutting down")
+    print("Shutting down")
 
 
 app = FastAPI(

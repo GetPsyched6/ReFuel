@@ -31,7 +31,7 @@ class StealthFuelScraper:
     
     def initialize_driver(self):
         """Initialize Chrome with stealth settings."""
-        print("🚀 Initializing stealth Chrome driver...")
+        print("Initializing stealth Chrome driver...")
         
         options = Options()
         
@@ -67,11 +67,11 @@ class StealthFuelScraper:
         self.driver.set_page_load_timeout(60)
         self.driver.implicitly_wait(10)
         
-        print("✅ Driver initialized successfully")
+        print("Driver initialized successfully")
     
     def scrape_ups(self) -> List[Dict]:
         """Scrape UPS Ground Domestic fuel surcharge table."""
-        print("\n🚀 Scraping UPS Ground Domestic...")
+        print("\nScraping UPS Ground Domestic...")
         
         try:
             # Navigate to UPS page
@@ -160,10 +160,10 @@ class StealthFuelScraper:
                     # If we successfully scraped rows from this table, mark as found and stop
                     if rows_added > 0:
                         table_found = True
-                        print(f"   📊 Extracted {rows_added} rows from this table")
+                        print(f"   Extracted {rows_added} rows from this table")
             
             if data:
-                print(f"✅ UPS: Successfully scraped {len(data)} rows")
+                print(f"UPS: Successfully scraped {len(data)} rows")
             else:
                 print("⚠️  UPS: No data found - saving screenshot")
                 self.driver.save_screenshot('ups_debug.png')
@@ -171,7 +171,7 @@ class StealthFuelScraper:
             return data
             
         except Exception as e:
-            print(f"❌ UPS scraping failed: {str(e)}")
+            print(f"UPS scraping failed: {str(e)}")
             try:
                 self.driver.save_screenshot('ups_error.png')
             except:
@@ -180,7 +180,7 @@ class StealthFuelScraper:
     
     def scrape_fedex(self) -> List[Dict]:
         """Scrape FedEx Ground fuel surcharge table."""
-        print("\n🚀 Scraping FedEx Ground...")
+        print("\nScraping FedEx Ground...")
         
         try:
             # Navigate to FedEx page
@@ -292,10 +292,10 @@ class StealthFuelScraper:
                     # If we successfully scraped rows from this table, mark as found and stop
                     if rows_added > 0:
                         table_found = True
-                        print(f"   📊 Extracted {rows_added} rows from this table")
+                        print(f"   Extracted {rows_added} rows from this table")
             
             if data:
-                print(f"✅ FedEx: Successfully scraped {len(data)} rows")
+                print(f"FedEx: Successfully scraped {len(data)} rows")
             else:
                 print("⚠️  FedEx: No data found - saving debug info")
                 self.driver.save_screenshot('fedex_debug.png')
@@ -313,7 +313,7 @@ class StealthFuelScraper:
             return data
             
         except Exception as e:
-            print(f"❌ FedEx scraping failed: {str(e)}")
+            print(f"FedEx scraping failed: {str(e)}")
             try:
                 self.driver.save_screenshot('fedex_error.png')
             except:
@@ -322,7 +322,7 @@ class StealthFuelScraper:
     
     def scrape_dhl(self) -> List[Dict]:
         """Scrape DHL Express Road fuel surcharge table."""
-        print("\n🚀 Scraping DHL Express Road...")
+        print("\nScraping DHL Express Road...")
         
         try:
             # Navigate to DHL page
@@ -384,12 +384,12 @@ class StealthFuelScraper:
                                     continue
             
             if data:
-                print(f"✅ DHL: Successfully scraped {len(data)} rows")
+                print(f"DHL: Successfully scraped {len(data)} rows")
             
             return data
             
         except Exception as e:
-            print(f"❌ DHL scraping failed: {str(e)}")
+            print(f"DHL scraping failed: {str(e)}")
             return []
     
     def scrape_all(self):
@@ -431,10 +431,10 @@ class StealthFuelScraper:
                 filename = f"fuel_surcharge_{carrier}_{timestamp}.json"
                 with open(filename, 'w') as f:
                     json.dump(data, f, indent=2)
-                print(f"✅ {carrier.upper():6s}: {filename:50s} ({len(data):3d} rows)")
+                print(f"{carrier.upper():6s}: {filename:50s} ({len(data):3d} rows)")
                 total_rows += len(data)
             else:
-                print(f"❌ {carrier.upper():6s}: No data scraped")
+                print(f"{carrier.upper():6s}: No data scraped")
         
         # Export combined file
         all_data = []
@@ -445,17 +445,17 @@ class StealthFuelScraper:
             combined_filename = f"fuel_surcharge_combined_{timestamp}.json"
             with open(combined_filename, 'w') as f:
                 json.dump(all_data, f, indent=2)
-            print(f"\n✅ COMBINED: {combined_filename:50s} ({total_rows:3d} rows)")
+            print(f"\nCOMBINED: {combined_filename:50s} ({total_rows:3d} rows)")
         
         print("\n" + "="*70)
-        print("✨ SCRAPING COMPLETE!")
+        print("Scraping complete.")
         print("="*70)
         
         # Print detailed summary
-        print("\n📊 DETAILED SUMMARY:")
+        print("\nDetailed summary:")
         print("-" * 70)
         for carrier, data in self.results.items():
-            status = "✅ SUCCESS" if data else "❌ FAILED"
+            status = "SUCCESS" if data else "FAILED"
             count = len(data) if data else 0
             print(f"  {carrier.upper():8s} | {status:12s} | {count:3d} rows")
         print("-" * 70)
@@ -474,7 +474,7 @@ def main():
         # Check success
         total = sum(len(data) for data in scraper.results.values())
         if total > 0:
-            print(f"\n🎉 SUCCESS! Scraped {total} total rows of real data!")
+            print(f"\nSuccess: Scraped {total} total rows of real data.")
             print("📁 Check the CSV files in the current directory.")
         else:
             print("\n⚠️  No data was scraped. Check error screenshots for debugging.")
@@ -482,7 +482,7 @@ def main():
     except KeyboardInterrupt:
         print("\n\n⚠️  Scraping interrupted by user")
     except Exception as e:
-        print(f"\n\n❌ Fatal error: {str(e)}")
+        print(f"\n\nFatal error: {str(e)}")
         import traceback
         traceback.print_exc()
     finally:

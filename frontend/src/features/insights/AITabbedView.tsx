@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
 	Zap,
@@ -29,6 +29,7 @@ interface ExecutiveAnalysisResponse {
 		session_id: number;
 		generated_at: string;
 		note?: string;
+		_is_fallback?: boolean;
 	};
 }
 
@@ -53,11 +54,7 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 	const [retryCount, setRetryCount] = useState(0);
 	const MAX_RETRIES = 3;
 
-	useEffect(() => {
-		loadAllInsights();
-	}, [sessionId]);
-
-	const loadAllInsights = async () => {
+	const loadAllInsights = useCallback(async () => {
 		// Reset states
 		setLoadingQuick(true);
 		setLoadingAnalysis(true);
@@ -113,7 +110,13 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 			setLoadingAnalysis(false);
 			setLoadingRecommendations(false);
 		}
-	};
+	}, [sessionId]);
+
+	useEffect(() => {
+		if (sessionId) {
+			loadAllInsights();
+		}
+	}, [sessionId, loadAllInsights]);
 
 	const retryExecutiveAnalysis = async () => {
 		try {
@@ -139,7 +142,7 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 		}
 	};
 
-	const [activeTab, setActiveTab] = useState("recommendations");
+	const [activeTab, setActiveTab] = useState("analysis");
 
 	const tabConfigs = [
 		{
@@ -149,8 +152,8 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 			description: "Instant competitive gaps and urgent actions",
 			tooltip:
 				"This analyzes current rates across all carriers and highlights where you're being undercut or have opportunities to increase prices. It compares this week's data with last week to catch urgent changes.",
-			gradient: "from-blue-500 to-blue-600",
-			glowColor: "group-hover:shadow-blue-500/20",
+			gradient: "from-amber-500 to-amber-600",
+			glowColor: "group-hover:shadow-amber-500/20",
 		},
 		{
 			value: "analysis",
@@ -169,8 +172,8 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 			description: "AI-powered pricing suggestions",
 			tooltip:
 				"The AI examines every price range where competitors have data, then suggests 5-10 specific rate changes. Each recommendation includes whether to increase, decrease, or add new rates, with detailed reasoning based on competitor positioning and historical trends.",
-			gradient: "from-emerald-500 to-emerald-600",
-			glowColor: "group-hover:shadow-emerald-500/20",
+			gradient: "from-blue-500 to-blue-600",
+			glowColor: "group-hover:shadow-blue-500/20",
 		},
 	];
 
@@ -280,11 +283,11 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 							{[1, 2, 3, 4].map((i) => (
 								<div
 									key={i}
-									className="h-32 bg-gradient-to-r from-purple-50/50 via-blue-50/50 to-purple-50/50 dark:from-purple-900/20 dark:via-blue-900/20 dark:to-purple-900/20 rounded-lg animate-pulse"
+									className="h-32 bg-gradient-to-r from-purple-200/80 via-blue-200/80 to-purple-200/80 dark:from-purple-900/20 dark:via-blue-900/20 dark:to-purple-900/20 rounded-lg animate-pulse"
 								/>
 							))}
-							<p className="text-center text-sm text-purple-600 dark:text-purple-400 animate-pulse">
-								🤖 AI generating comprehensive executive analysis...
+							<p className="text-center text-sm font-bold text-purple-700 dark:text-purple-400 animate-pulse">
+								AI generating comprehensive executive analysis...
 							</p>
 						</div>
 					) : errorAnalysis ? (
@@ -292,7 +295,13 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 							<p className="text-red-700 dark:text-red-300">{errorAnalysis}</p>
 						</div>
 					) : executiveAnalysis ? (
-						<div className="space-y-6 animate-in fade-in duration-500">
+						<div className="space-y-6 animate-in fade-in duration-500 relative">
+							{executiveAnalysis.metadata?._is_fallback && (
+								<div
+									className="absolute top-0 right-0 w-2 h-2 bg-amber-500 rounded-full"
+									title="Using fallback data"
+								></div>
+							)}
 							{/* Summary */}
 							<div className="p-6 bg-gradient-to-br from-white/80 to-purple-50/30 dark:from-gray-800/80 dark:to-purple-900/20 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-700/50">
 								<h3 className="text-lg font-semibold text-purple-700 dark:text-purple-300 mb-3">

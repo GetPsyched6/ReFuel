@@ -24,11 +24,11 @@ const QuickInsights: React.FC<QuickInsightsProps> = ({
 				{[1, 2, 3].map((i) => (
 					<div
 						key={i}
-						className="h-20 bg-gradient-to-r from-blue-50/50 via-purple-50/50 to-blue-50/50 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-blue-900/20 rounded-lg animate-pulse"
+						className="h-20 bg-gradient-to-r from-blue-200/80 via-purple-200/80 to-blue-200/80 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-blue-900/20 rounded-lg animate-pulse"
 					/>
 				))}
-				<p className="text-center text-sm text-blue-600 dark:text-blue-400 animate-pulse">
-					🤖 AI analyzing competitive landscape...
+				<p className="text-center text-sm font-bold text-blue-700 dark:text-blue-400 animate-pulse">
+					AI is analyzing the competitive landscape...
 				</p>
 			</div>
 		);
@@ -45,13 +45,27 @@ const QuickInsights: React.FC<QuickInsightsProps> = ({
 	}
 
 	// Check if urgent actions contain "No urgent" or similar
+	const urgentText =
+		typeof insights?.urgent_actions === "string"
+			? insights.urgent_actions
+			: JSON.stringify(insights?.urgent_actions || "");
 	const isUrgent =
 		insights &&
-		!insights.urgent_actions.toLowerCase().includes("no urgent") &&
-		!insights.urgent_actions.toLowerCase().includes("no significant");
+		urgentText &&
+		!urgentText.toLowerCase().includes("no urgent") &&
+		!urgentText.toLowerCase().includes("no significant") &&
+		!urgentText.toLowerCase().includes("no rate changes");
+
+	const isFallback = (insights as any)?._is_fallback === true;
 
 	return (
-		<div className="space-y-4 animate-in fade-in duration-500">
+		<div className="space-y-4 animate-in fade-in duration-500 relative">
+			{isFallback && (
+				<div
+					className="absolute top-0 right-0 w-2 h-2 bg-amber-500 rounded-full"
+					title="Using fallback data"
+				></div>
+			)}
 			{/* Competitive Gaps */}
 			<div className="group p-6 bg-gradient-to-br from-white/80 to-blue-50/50 dark:from-gray-800/80 dark:to-blue-900/20 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-300">
 				<div className="flex items-start gap-3">
@@ -105,7 +119,7 @@ const QuickInsights: React.FC<QuickInsightsProps> = ({
 							)}
 						</div>
 						<p className="text-gray-900 dark:text-gray-100 leading-relaxed">
-							{insights.urgent_actions}
+							{urgentText}
 						</p>
 					</div>
 				</div>

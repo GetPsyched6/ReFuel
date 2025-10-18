@@ -11,9 +11,9 @@ import uvicorn
 from backend.config import settings
 
 if __name__ == "__main__":
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"📍 API: http://{settings.API_HOST}:{settings.API_PORT}")
-    print(f"📍 Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
+    print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"API: http://{settings.API_HOST}:{settings.API_PORT}")
+    print(f"Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
     
     uvicorn.run(
         "backend.main:app",

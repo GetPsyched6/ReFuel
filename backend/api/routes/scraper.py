@@ -25,8 +25,26 @@ async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTas
     """
     result = await scraper_service.scrape_carriers(request.carriers)
     
-    # Check for changes in background
-    if result.status == "success":
+    # If scrape was successful, check for duplicates
+    if result.status == "success" and result.data:
+        is_duplicate = await scraper_service.is_duplicate_data(result.data)
+        
+        if is_duplicate:
+            # Data is identical to latest session, delete the new session we just created
+            # and return a special response
+            await db.execute_write(
+                "DELETE FROM scrape_sessions WHERE id = ?",
+                (result.session_id,)
+            )
+            
+            # Return existing result with isDuplicate flag
+            result.session_id = None
+            result.error = "Data unchanged from last scrape. Skipped to prevent duplicates."
+            # Keep status as success but set error message
+            return result
+    
+    # Check for changes in background if not a duplicate
+    if result.status == "success" and result.session_id:
         background_tasks.add_task(
             scraper_service.check_data_changes,
             result.session_id
