@@ -17,15 +17,17 @@ router = APIRouter()
 @router.get("/compare", response_model=dict)
 async def get_comparison(
     view: ComparisonView = Query(ComparisonView.NORMALIZED),
-    session_id: Optional[int] = None
+    session_id: Optional[int] = None,
+    include_previous: bool = Query(False)
 ):
     """
     Get comparison data for specified view type
     
     - **view**: normalized (default), overlap, or complete
     - **session_id**: Specific session (None = latest)
+    - **include_previous**: Include previous session data for change detection
     """
-    return await comparison_service.get_comparison(session_id, view)
+    return await comparison_service.get_comparison(session_id, view, include_previous)
 
 
 @router.get("/carrier/{carrier_name}")
@@ -45,4 +47,15 @@ async def get_carrier_focus(
         return {"error": f"Invalid carrier. Must be one of: {', '.join(valid_carriers)}"}
     
     return await comparison_service.get_carrier_focus(carrier, session_id)
+
+
+@router.get("/carrier-last-updates", response_model=dict)
+async def get_carrier_last_updates(session_id: Optional[int] = None):
+    """
+    Get the last update date for each carrier
+    Returns when each carrier's data last changed from the previous session
+    
+    - **session_id**: Current session (None = latest)
+    """
+    return await comparison_service.get_carrier_last_updates(session_id)
 

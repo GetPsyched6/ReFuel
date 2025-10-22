@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card } from "@/components/ui/Card";
 import { historyApi } from "@/services/api";
 import {
@@ -44,6 +44,58 @@ export default function HistoricalTrends() {
 		}
 	};
 
+	// Calculate dynamic Y-axis domain to zoom into the data range
+	const yAxisDomain = useMemo(() => {
+		if (trends.length === 0) return [0, 25];
+
+		let min = Infinity;
+		let max = -Infinity;
+
+		trends.forEach((point) => {
+			["UPS", "FedEx", "DHL"].forEach((carrier) => {
+				if (point[carrier] != null) {
+					min = Math.min(min, point[carrier]);
+					max = Math.max(max, point[carrier]);
+				}
+			});
+		});
+
+		// Add padding (10% on each side) to make the chart more readable
+		const range = max - min;
+		const padding = range * 0.1 || 1; // At least 1% padding
+		return [Math.max(0, min - padding), max + padding];
+	}, [trends]);
+
+	// Custom tooltip formatter to round values
+	const CustomTooltip = ({ active, payload, label }: any) => {
+		if (!active || !payload) return null;
+
+		return (
+			<div
+				style={{
+					backgroundColor: "rgba(0, 0, 0, 0.8)",
+					border: "none",
+					borderRadius: "8px",
+					color: "white",
+					padding: "12px",
+				}}
+			>
+				<p style={{ marginBottom: "8px", fontWeight: "bold" }}>{label}</p>
+				{payload.map((entry: any, index: number) => (
+					<p
+						key={index}
+						style={{
+							color: entry.color,
+							margin: "4px 0",
+						}}
+					>
+						{entry.name} : {entry.value?.toFixed(2)}
+					</p>
+				))}
+			</div>
+		);
+	};
+
 	if (loading) {
 		return (
 			<Card glass className="animate-pulse">
@@ -81,15 +133,10 @@ export default function HistoricalTrends() {
 								angle: -90,
 								position: "insideLeft",
 							}}
+							domain={yAxisDomain}
+							tickFormatter={(value) => value.toFixed(1)}
 						/>
-						<Tooltip
-							contentStyle={{
-								backgroundColor: "rgba(0, 0, 0, 0.8)",
-								border: "none",
-								borderRadius: "8px",
-								color: "white",
-							}}
-						/>
+						<Tooltip content={<CustomTooltip />} />
 						<Legend />
 						<Line
 							type="monotone"
@@ -104,7 +151,7 @@ export default function HistoricalTrends() {
 							dataKey="FedEx"
 							stroke="#8B5CF6"
 							strokeWidth={2}
-							strokeDasharray="5 5"
+							strokeDasharray="0"
 							dot={{ fill: "#8B5CF6", r: 4 }}
 						/>
 						<Line

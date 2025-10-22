@@ -22,7 +22,8 @@ def parse_ai_json_response(text: str) -> Optional[Dict]:
     Handles markdown code blocks, surrounding text, escaped JSON, 
     unbalanced braces, and trailing commas.
     """
-    if not text:
+    if not text or len(text.strip()) < 10:  # Too short to be valid JSON
+        print(f"DEBUG: Response too short ({len(text)} chars) - likely incomplete")
         return None
     
     json_str = text.strip()
@@ -179,8 +180,13 @@ class AIService:
             
             # Extract generated text from response
             if "results" in result and len(result["results"]) > 0:
-                return result["results"][0].get("generated_text", "")
+                generated = result["results"][0].get("generated_text", "")
+                if not generated or generated.strip() == "":
+                    print(f"⚠️ WARNING: Empty AI response from Watsonx!")
+                    print(f"Full response: {result}")
+                return generated
             
+            print(f"⚠️ WARNING: No results in Watsonx response: {result}")
             return ""
     
     def _parse_json_aggressive(self, text: str) -> Optional[Dict]:
@@ -390,20 +396,32 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanation, just JSON startin
             ])
             
             # Build enhanced prompt with context
-            prompt = f"""You are an expert fuel surcharge competitive intelligence analyst. You help analyze pricing data and provide strategic insights.
+            prompt = f"""You are a professional fuel surcharge analyst providing clear, accurate information about carrier pricing. You have access to data for UPS, FedEx, and DHL fuel surcharges.
 
 {conversation}
 
-CURRENT DATA CONTEXT:
+DATA AVAILABLE TO YOU:
 {context_data}
 
 USER QUESTION: {message}
 
-Provide a helpful, data-driven response. If referencing specific numbers, cite them accurately from the context. Be concise but insightful.
+INSTRUCTIONS FOR RESPONSE STYLE:
+- Maintain a professional, business-appropriate tone
+- NEVER mention technical terms like "database context", "field", "sessions_ago", "JSON", or "data structure"
+- State facts clearly and directly without explaining your data sources
+- Format dates in a readable format (e.g., "October 17, 2025")
+- Use percentages with 1-2 decimal places (e.g., "20.25%" not "20.227142857%")
+- Keep responses concise and to the point (1-3 sentences for simple questions)
+- Be informative and helpful without being overly casual
+
+Example responses:
+- "FedEx rates were last updated on October 17, 2025."
+- "UPS rates currently range from 18.5% to 22.5% depending on fuel price levels."
+- "DHL offers the lowest rates, starting at 10% for lower fuel price ranges."
 
 ASSISTANT:"""
             
-            response = await self._call_watsonx(prompt, max_tokens=400, temperature=0.7)
+            response = await self._call_watsonx(prompt, max_tokens=500, temperature=0.7)
             return response.strip()
             
         except Exception as e:
@@ -414,18 +432,33 @@ ASSISTANT:"""
         """Detect the type of query from user message"""
         message_lower = message.lower()
         
-        if any(word in message_lower for word in ['rate', 'price', 'cost', 'how much', 'percentage', '%', 'surcharge']):
-            return 'rate_query'
-        elif any(word in message_lower for word in ['compare', 'comparison', 'versus', 'vs', 'difference', 'between']):
+        # Check for "last updated" type questions first (most specific)
+        if any(phrase in message_lower for phrase in ['last updated', 'last update', 'when was', 'when did', 'last time', 'last changed', 'last modified']):
+            return 'last_updated'
+        # Check for comparisons and extremes before general rate queries (more specific)
+        elif any(word in message_lower for word in ['compare', 'comparison', 'versus', 'vs', 'difference', 'between', 'better', 'worse']):
             return 'comparison'
-        elif any(word in message_lower for word in ['trend', 'change', 'history', 'past', 'week', 'month', 'ago']):
-            return 'historical'
-        elif any(word in message_lower for word in ['opportunity', 'optimize', 'improve', 'recommend', 'should']):
-            return 'opportunity'
         elif any(word in message_lower for word in ['highest', 'lowest', 'cheapest', 'expensive', 'best', 'worst']):
             return 'extremes'
+        elif any(word in message_lower for word in ['trend', 'change', 'history', 'past', 'week', 'month', 'ago', 'previous', 'earlier']):
+            return 'historical'
+        elif any(word in message_lower for word in ['rate', 'price', 'cost', 'how much', 'percentage', '%', 'surcharge']):
+            return 'rate_query'
+        elif any(word in message_lower for word in ['opportunity', 'optimize', 'improve', 'recommend', 'should']):
+            return 'opportunity'
         else:
             return 'general'
+    
+    def _extract_carrier_from_message(self, message: str) -> Optional[str]:
+        """Extract carrier name from message (UPS, FedEx, DHL)"""
+        message_lower = message.lower()
+        if 'ups' in message_lower:
+            return 'UPS'
+        elif 'fedex' in message_lower or 'fed ex' in message_lower:
+            return 'FedEx'
+        elif 'dhl' in message_lower:
+            return 'DHL'
+        return None
     
     async def _get_relevant_context(self, query_type: str, message: str, session_id: Optional[int]) -> str:
         """Get relevant data based on query type"""
@@ -433,12 +466,80 @@ ASSISTANT:"""
             return "No recent data available. Please run a scrape first."
         
         try:
-            if query_type == 'rate_query':
+            # Get current session timestamp for historical comparisons
+            current_session = await db.execute_query(
+                "SELECT timestamp FROM scrape_sessions WHERE id = ?",
+                (session_id,)
+            )
+            current_timestamp = current_session[0]['timestamp'] if current_session else None
+            
+            if query_type == 'last_updated':
+                # Determine when each carrier's data was last updated
+                carrier_filter = self._extract_carrier_from_message(message)
+                
+                # Get all sessions up to current
+                sessions_query = """
+                    SELECT id, timestamp 
+                    FROM scrape_sessions 
+                    WHERE timestamp <= ?
+                    ORDER BY timestamp DESC
+                """
+                all_sessions = await db.execute_query(sessions_query, (current_timestamp,))
+                
+                carriers_to_check = [carrier_filter] if carrier_filter else ['UPS', 'FedEx', 'DHL']
+                last_updates = {}
+                
+                for carrier in carriers_to_check:
+                    last_update_info = await self._find_last_update_for_carrier(carrier, all_sessions)
+                    last_updates[carrier] = last_update_info
+                
+                # Also include current session date for context
+                context = {
+                    "current_session_date": current_timestamp,
+                    "carrier_last_updates": last_updates,
+                    "question_about_carrier": carrier_filter
+                }
+                
+                return f"Last update information:\n{json.dumps(context, indent=2)}"
+            
+            elif query_type == 'historical':
+                # Get historical trends - last few sessions
+                sessions_query = """
+                    SELECT id, timestamp 
+                    FROM scrape_sessions 
+                    WHERE timestamp <= ?
+                    ORDER BY timestamp DESC
+                    LIMIT 5
+                """
+                sessions = await db.execute_query(sessions_query, (current_timestamp,))
+                
+                # Get average rates for each session
+                historical_data = []
+                for session in sessions:
+                    data = await db.execute_query(
+                        "SELECT carrier, AVG(surcharge_pct) as avg_pct FROM fuel_surcharges WHERE session_id = ? GROUP BY carrier",
+                        (session['id'],)
+                    )
+                    historical_data.append({
+                        "date": session['timestamp'],
+                        "rates": {row['carrier']: round(row['avg_pct'], 2) for row in data}
+                    })
+                
+                return f"Historical data (last 5 sessions):\n{json.dumps(historical_data, indent=2)}"
+            
+            elif query_type == 'rate_query':
                 # Get specific rate information
-                data = await db.execute_query(
-                    "SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct FROM fuel_surcharges WHERE session_id = ? ORDER BY at_least_usd LIMIT 30",
-                    (session_id,)
-                )
+                carrier_filter = self._extract_carrier_from_message(message)
+                if carrier_filter:
+                    data = await db.execute_query(
+                        "SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct FROM fuel_surcharges WHERE session_id = ? AND carrier = ? ORDER BY at_least_usd",
+                        (session_id, carrier_filter)
+                    )
+                else:
+                    data = await db.execute_query(
+                        "SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct FROM fuel_surcharges WHERE session_id = ? ORDER BY at_least_usd LIMIT 30",
+                        (session_id,)
+                    )
                 return f"Recent rates:\n{json.dumps(data[:15], indent=2)}"
             
             elif query_type == 'comparison':
@@ -461,7 +562,6 @@ ASSISTANT:"""
                 )
                 lowest = await db.execute_query(
                     """SELECT carrier, at_least_usd, but_less_than_usd, surcharge_pct 
-                       FROM fuel_surcharges 
                        WHERE session_id = ? 
                        ORDER BY surcharge_pct ASC 
                        LIMIT 10""",
@@ -500,7 +600,57 @@ ASSISTANT:"""
                 
         except Exception as e:
             print(f"⚠️ Context retrieval error: {e}")
+            import traceback
+            traceback.print_exc()
             return "Unable to retrieve specific data context."
+    
+    async def _find_last_update_for_carrier(self, carrier: str, all_sessions: List[Dict]) -> Dict:
+        """Find when a carrier's data was last updated (changed from previous session)"""
+        try:
+            for i in range(len(all_sessions) - 1):
+                current_sess = all_sessions[i]
+                prev_sess = all_sessions[i + 1]
+                
+                # Get data for this carrier in both sessions
+                query = """
+                    SELECT at_least_usd, but_less_than_usd, surcharge_pct 
+                    FROM fuel_surcharges 
+                    WHERE session_id = ? AND carrier = ?
+                    ORDER BY at_least_usd
+                """
+                current = await db.execute_query(query, (current_sess['id'], carrier))
+                previous = await db.execute_query(query, (prev_sess['id'], carrier))
+                
+                # Check if data differs
+                if self._data_differs_simple(current, previous):
+                    return {
+                        "last_updated": current_sess['timestamp'],
+                        "sessions_ago": i,
+                        "changed_from_previous": True
+                    }
+            
+            # If no change found, data unchanged since oldest session
+            return {
+                "last_updated": all_sessions[-1]['timestamp'] if all_sessions else None,
+                "sessions_ago": len(all_sessions) - 1,
+                "changed_from_previous": False
+            }
+        except Exception as e:
+            print(f"⚠️ Error finding last update for {carrier}: {e}")
+            return {"error": str(e)}
+    
+    def _data_differs_simple(self, current: List[Dict], previous: List[Dict]) -> bool:
+        """Check if two datasets differ"""
+        if len(current) != len(previous):
+            return True
+        
+        for i in range(len(current)):
+            if (current[i]['at_least_usd'] != previous[i]['at_least_usd'] or
+                current[i]['but_less_than_usd'] != previous[i]['but_less_than_usd'] or
+                abs(current[i]['surcharge_pct'] - previous[i]['surcharge_pct']) > 0.001):
+                return True
+        
+        return False
     
     async def generate_executive_analysis(self, session_id: int) -> Dict:
         """
@@ -890,7 +1040,7 @@ CRITICAL:
 Start with {{:
 {{"""
             
-            response_text = await self._call_watsonx(prompt, max_tokens=500, temperature=0.3)
+            response_text = await self._call_watsonx(prompt, max_tokens=800, temperature=0.3)
             print(f"DEBUG Quick Insights AI raw response: {response_text[:400]}...")
             parsed = parse_ai_json_response(response_text)
             print(f"DEBUG Quick Insights parsed result: {parsed is not None}")

@@ -16,7 +16,7 @@ import {
 	BarChart3,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { historyApi } from "@/services/api";
+import { historyApi, comparisonApi } from "@/services/api";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import * as Tabs from "@radix-ui/react-tabs";
 import { cn } from "@/utils/cn";
@@ -39,6 +39,17 @@ interface HistoricalRow {
 
 type HistoricalDetails = Record<string, HistoricalRow[]> | null;
 
+interface CarrierLastUpdate {
+	last_updated: string;
+	sessions_ago: number;
+}
+
+interface CarrierLastUpdates {
+	UPS: CarrierLastUpdate;
+	FedEx: CarrierLastUpdate;
+	DHL: CarrierLastUpdate;
+}
+
 export default function Dashboard() {
 	const [showChatbot, setShowChatbot] = useState(false);
 	const [sessions, setSessions] = useState<Session[]>([]);
@@ -54,6 +65,8 @@ export default function Dashboard() {
 		useState<HistoricalDetails>(null);
 	const [modalLoading, setModalLoading] = useState(false);
 	const [modalError, setModalError] = useState<string | null>(null);
+	const [carrierLastUpdates, setCarrierLastUpdates] =
+		useState<CarrierLastUpdates | null>(null);
 
 	useEffect(() => {
 		loadSessions();
@@ -68,6 +81,17 @@ export default function Dashboard() {
 			}
 		} catch (error) {
 			console.error("Failed to load sessions:", error);
+		}
+	};
+
+	const loadCarrierLastUpdates = async () => {
+		try {
+			const response = await comparisonApi.getCarrierLastUpdates(
+				currentSessionId || undefined
+			);
+			setCarrierLastUpdates(response.data);
+		} catch (error) {
+			console.error("Failed to load carrier last updates:", error);
 		}
 	};
 
@@ -97,6 +121,12 @@ export default function Dashboard() {
 		() => sessions.find((s) => s.id === currentSessionId),
 		[sessions, currentSessionId]
 	);
+
+	useEffect(() => {
+		if (currentSessionId) {
+			loadCarrierLastUpdates();
+		}
+	}, [currentSessionId]);
 
 	const openHistoricalModal = async () => {
 		if (!currentSessionId) return;
@@ -148,9 +178,31 @@ export default function Dashboard() {
 								)}
 							</div>
 							<p className="text-xs text-gray-600 dark:text-gray-400">
-								{hasDataChanged
-									? "Current session has different surcharge rates from previous week"
-									: "Review past sessions"}
+								{hasDataChanged && carrierLastUpdates ? (
+									<span>
+										{["UPS", "FedEx", "DHL"].map((carrier, idx) => {
+											const update =
+												carrierLastUpdates[carrier as keyof CarrierLastUpdates];
+											const date = new Date(
+												update.last_updated.includes("Z")
+													? update.last_updated
+													: update.last_updated + "Z"
+											);
+											const dateStr = date.toLocaleDateString("en-US", {
+												month: "short",
+												day: "numeric",
+											});
+											return (
+												<span key={carrier}>
+													<strong>{carrier}</strong> last updated {dateStr}
+													{idx < 2 ? " | " : ""}
+												</span>
+											);
+										})}
+									</span>
+								) : (
+									"Review past sessions"
+								)}
 							</p>
 						</div>
 					</div>

@@ -12,6 +12,14 @@ interface ComparisonRow {
 	ups_pct: number | null;
 	fedex_pct: number | null;
 	dhl_pct: number | null;
+	ups_pct_changed?: boolean;
+	ups_pct_prev?: number;
+	fedex_pct_changed?: boolean;
+	fedex_pct_prev?: number;
+	dhl_pct_changed?: boolean;
+	dhl_pct_prev?: number;
+	current_timestamp?: string;
+	previous_timestamp?: string;
 }
 
 export default function ComparisonTable({
@@ -32,7 +40,7 @@ export default function ComparisonTable({
 	const loadData = async () => {
 		setLoading(true);
 		try {
-			const response = await comparisonApi.getComparison(view, sessionId);
+			const response = await comparisonApi.getComparison(view, sessionId, true);
 			setData(response.data.rows || []);
 		} catch (error) {
 			console.error("Failed to load comparison:", error);
@@ -122,14 +130,6 @@ export default function ComparisonTable({
 							</thead>
 							<tbody>
 								{data.map((row, idx) => {
-									const values = [
-										row.ups_pct,
-										row.fedex_pct,
-										row.dhl_pct,
-									].filter((v) => v !== null) as number[];
-									const minValue =
-										values.length > 0 ? Math.min(...values) : null;
-
 									return (
 										<tr
 											key={idx}
@@ -141,19 +141,28 @@ export default function ComparisonTable({
 											<td className="py-3 px-4 text-center">
 												<SurchargeCell
 													value={row.ups_pct}
-													isLowest={row.ups_pct === minValue}
+													hasChanged={row.ups_pct_changed}
+													previousValue={row.ups_pct_prev}
+													currentTimestamp={row.current_timestamp}
+													previousTimestamp={row.previous_timestamp}
 												/>
 											</td>
 											<td className="py-3 px-4 text-center">
 												<SurchargeCell
 													value={row.fedex_pct}
-													isLowest={row.fedex_pct === minValue}
+													hasChanged={row.fedex_pct_changed}
+													previousValue={row.fedex_pct_prev}
+													currentTimestamp={row.current_timestamp}
+													previousTimestamp={row.previous_timestamp}
 												/>
 											</td>
 											<td className="py-3 px-4 text-center">
 												<SurchargeCell
 													value={row.dhl_pct}
-													isLowest={row.dhl_pct === minValue}
+													hasChanged={row.dhl_pct_changed}
+													previousValue={row.dhl_pct_prev}
+													currentTimestamp={row.current_timestamp}
+													previousTimestamp={row.previous_timestamp}
 												/>
 											</td>
 										</tr>
@@ -176,27 +185,71 @@ export default function ComparisonTable({
 
 function SurchargeCell({
 	value,
-	isLowest,
+	hasChanged,
+	previousValue,
+	currentTimestamp,
+	previousTimestamp,
 }: {
 	value: number | null;
-	isLowest: boolean;
+	hasChanged?: boolean;
+	previousValue?: number;
+	currentTimestamp?: string;
+	previousTimestamp?: string;
 }) {
 	if (value === null) {
 		return <span className="text-gray-400 dark:text-gray-600">-</span>;
 	}
 
-	return (
+	const formatDate = (timestamp?: string) => {
+		if (!timestamp) return "";
+		const date = new Date(
+			timestamp.includes("Z") ? timestamp : timestamp + "Z"
+		);
+		return date.toLocaleDateString("en-US", {
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+		});
+	};
+
+	// Show amber pill if value changed from previous session
+	const showAmber = hasChanged && previousValue !== undefined;
+
+	const pill = (
 		<span
 			className={cn(
-				"inline-block px-3 py-1 rounded-full font-semibold transition-all duration-200 hover:scale-110",
-				isLowest
-					? "bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg ring-2 ring-green-300/50 dark:ring-green-600/30"
+				"inline-block px-3 py-1 rounded-full font-semibold transition-all duration-200 hover:scale-110 cursor-default",
+				showAmber
+					? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg ring-2 ring-amber-300/50 dark:ring-amber-600/30"
 					: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
 			)}
 		>
 			{value.toFixed(2)}%
 		</span>
 	);
+
+	// If changed, wrap in tooltip
+	if (showAmber) {
+		return (
+			<div className="group relative inline-block">
+				{pill}
+				<div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none">
+					<div className="font-semibold mb-1">Rate Changed</div>
+					<div>
+						Last session ({formatDate(previousTimestamp)}):{" "}
+						<span className="font-bold">{previousValue?.toFixed(2)}%</span>
+					</div>
+					<div>
+						Current session ({formatDate(currentTimestamp)}):{" "}
+						<span className="font-bold">{value.toFixed(2)}%</span>
+					</div>
+					<div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+				</div>
+			</div>
+		);
+	}
+
+	return pill;
 }
 
 import { cn } from "@/utils/cn";

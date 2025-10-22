@@ -26,14 +26,24 @@ export const scraperApi = {
 export const comparisonApi = {
 	getComparison: (
 		view: "normalized" | "overlap" | "complete" | "comparable" = "normalized",
-		sessionId?: number
+		sessionId?: number,
+		includePrevious: boolean = false
 	) =>
 		api.get("/comparison/compare", {
-			params: { view, session_id: sessionId },
+			params: {
+				view,
+				session_id: sessionId,
+				include_previous: includePrevious,
+			},
 		}),
 
 	getCarrierFocus: (carrier: string, sessionId?: number) =>
 		api.get(`/comparison/carrier/${carrier}`, {
+			params: { session_id: sessionId },
+		}),
+
+	getCarrierLastUpdates: (sessionId?: number) =>
+		api.get("/comparison/carrier-last-updates", {
 			params: { session_id: sessionId },
 		}),
 };

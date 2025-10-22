@@ -109,7 +109,7 @@ export default function Layout({
 							className="hidden lg:flex flex-col gap-1.5 px-4 py-2 rounded-lg glass dark:glass-dark w-full max-w-md mx-auto"
 						>
 							<div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-								<span>Next Scrape</span>
+								<span>Next Automated Data Pull</span>
 								<span className="font-semibold text-gray-700 dark:text-gray-200">
 									{weekProgress.elapsedLabel} elapsed
 								</span>
@@ -121,7 +121,7 @@ export default function Layout({
 								></div>
 							</div>
 							<p className="text-[10px] text-gray-500 dark:text-gray-400">
-								Next scrape (every Monday) in {weekProgress.remainingLabel}
+								Next pull (weekly) in {weekProgress.remainingLabel}
 							</p>
 						</motion.div>
 
