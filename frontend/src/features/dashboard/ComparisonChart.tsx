@@ -17,7 +17,7 @@ import {
 } from "recharts";
 import { TrendingUp, Maximize2, Minimize2 } from "lucide-react";
 import { getCarrierBrandColor, getExtrapolatedOpacity } from "@/theme/carriers";
-import { findCarrierInflections } from "@/utils/bandInflection";
+import { findCarrierInflections, findInflection } from "@/utils/bandInflection";
 import { comparisonApi, metadataApi } from "@/services/api";
 import { getCarrierColorVariant, getStrokeDashArray, getCarrierColor } from "@/theme/carriers";
 import { useTheme } from "@/components/layout/ThemeProvider";
@@ -41,6 +41,14 @@ interface CurveData {
 	hasExtrapolation: boolean;
 }
 
+interface AdditionalCurve {
+	id: number;
+	carrier: string;
+	label: string;
+	effectiveDate: string;
+	isActive: boolean;
+}
+
 interface ComparisonChartProps {
 	data: ComparisonRow[];
 	curves?: CurveData[];
@@ -56,6 +64,8 @@ interface ComparisonChartProps {
 	fuelCategory?: string;
 	market?: string;
 	showExtrapolation?: boolean;
+	additionalCurves?: AdditionalCurve[];
+	additionalCurveRawData?: Map<number, any[]>;
 }
 
 export default function ComparisonChart({
@@ -68,6 +78,8 @@ export default function ComparisonChart({
 	fuelCategory,
 	market,
 	showExtrapolation = true,
+	additionalCurves = [],
+	additionalCurveRawData = new Map(),
 }: ComparisonChartProps) {
 	const [completeData, setCompleteData] = useState<ComparisonRow[]>([]);
 	const [yAxisMode, setYAxisMode] = useState<"auto" | "fixed">("auto");
@@ -83,17 +95,33 @@ export default function ComparisonChart({
 	const chartData = useMemo(() => {
 		if (isMultiCurveMode) return [];
 		console.log('📊 Chart rendering', data.length, 'bands');
-		return data.map((row) => ({
+		return data.map((row: any) => {
+			const baseData: any = {
 			range: formatRangeLabel(row.at_least_usd, row.but_less_than_usd),
-			priceValue: row.at_least_usd,
+				priceValue: row.at_least_usd,
 			UPS: row.ups_pct,
 			FedEx: row.fedex_pct,
 			DHL: row.dhl_pct,
-			UPS_extrapolated: row.ups_extrapolated || false,
-			FedEx_extrapolated: row.fedex_extrapolated || false,
-			DHL_extrapolated: row.dhl_extrapolated || false,
-		}));
-	}, [data, currencySymbol, isMultiCurveMode]);
+				UPS_extrapolated: row.ups_extrapolated || false,
+				FedEx_extrapolated: row.fedex_extrapolated || false,
+				DHL_extrapolated: row.dhl_extrapolated || false,
+			};
+			
+			// Include additional curve columns (e.g., fedex_24_pct -> FedEx_24)
+			for (const curve of additionalCurves) {
+				const columnKey = `${curve.carrier.toLowerCase()}_${curve.id}_pct`;
+				const extrapolatedKey = `${curve.carrier.toLowerCase()}_${curve.id}_extrapolated`;
+				const chartKey = `${curve.carrier}_${curve.id}`;
+				if (row[columnKey] !== undefined) {
+					baseData[chartKey] = row[columnKey];
+				}
+				// Also include extrapolation flag
+				baseData[`${chartKey}_extrapolated`] = row[extrapolatedKey] || false;
+			}
+			
+			return baseData;
+		});
+	}, [data, currencySymbol, isMultiCurveMode, additionalCurves]);
 
 	// MULTI-CURVE MODE: Convert curve data to chart format
 	// Strategy: Create separate continuous datasets for each curve to avoid gaps
@@ -409,27 +437,102 @@ export default function ComparisonChart({
 			return inflectionMap;
 		} else {
 			// Legacy mode: Use complete data
-			if (completeData.length === 0 || carriersWithData.length === 0) {
-				return new Map();
+			const inflectionMap = new Map<string, number>();
+			
+			if (completeData.length > 0 && carriersWithData.length > 0) {
+				// Build skip set with carrier names only (not full keys)
+				const carrierSkipSet = new Set<string>();
+				for (const carrier of carriersWithData) {
+					if (shouldSkipInflection(carrier)) {
+						carrierSkipSet.add(carrier);
+					}
+				}
+				
+				console.log('🔍 Checking inflections for carriers:', carriersWithData, 
+					'(skipped:', Array.from(carrierSkipSet), ')');
+				
+				const mainInflections = findCarrierInflections(completeData, carriersWithData, carrierSkipSet);
+				mainInflections.forEach((price, carrier) => inflectionMap.set(carrier, price));
 			}
 			
-			// Build skip set with carrier names only (not full keys)
-			const carrierSkipSet = new Set<string>();
-			for (const carrier of carriersWithData) {
-				if (shouldSkipInflection(carrier)) {
-					carrierSkipSet.add(carrier);
+			// Also detect inflections for additional curves using RAW data (not normalized)
+			if (additionalCurves.length > 0 && additionalCurveRawData.size > 0) {
+				console.log('🔍 Checking inflections for additional curves (using RAW data)...', {
+					additionalCurvesCount: additionalCurves.length,
+					additionalCurves: additionalCurves.map(c => `${c.carrier}_${c.id}`),
+					rawDataAvailable: Array.from(additionalCurveRawData.keys())
+				});
+				
+				for (const curve of additionalCurves) {
+					if (shouldSkipInflection(curve.carrier)) {
+						console.log(`   ⏭️ Skipping ${curve.carrier}_${curve.id} (in skip list)`);
+						continue;
+					}
+					
+					const chartKey = `${curve.carrier}_${curve.id}`;
+					
+					// Get RAW data for this curve (before any view transformation)
+					const rawRows = additionalCurveRawData.get(curve.id);
+					if (!rawRows || rawRows.length === 0) {
+						console.log(`   ⚠️ No raw data for ${chartKey}`);
+						continue;
+					}
+					
+					// Extract bands from raw data
+					const curveBands = rawRows
+						.map((row: any) => ({
+							at_least_usd: row.at_least_usd,
+							but_less_than_usd: row.but_less_than_usd,
+							surcharge_pct: row.surcharge_pct
+						}))
+						.sort((a: any, b: any) => a.at_least_usd - b.at_least_usd);
+					
+					console.log(`   📊 ${chartKey}: ${curveBands.length} raw bands for inflection detection`);
+					
+					if (curveBands.length >= 4) {
+						// Log the step widths to help debug
+						const stepWidths = curveBands.map((b: any) => (b.but_less_than_usd - b.at_least_usd).toFixed(3));
+						console.log(`   📏 Step widths (RAW): ${stepWidths.join(', ')}`);
+						
+						// Use findInflection directly with the raw bands
+						const inflectionPrice = findInflection(curveBands);
+						
+						if (inflectionPrice) {
+							inflectionMap.set(chartKey, inflectionPrice);
+							console.log(`   📍 Found inflection for ${chartKey} at $${inflectionPrice.toFixed(2)}`);
+						} else {
+							console.log(`   ⚪ No inflection found for ${chartKey}`);
+						}
+					} else {
+						console.log(`   ⚠️ Not enough bands for ${chartKey} (need 4+, got ${curveBands.length})`);
+					}
 				}
 			}
 			
-			console.log('🔍 Checking inflections for carriers:', carriersWithData, 
-				'(skipped:', Array.from(carrierSkipSet), ')');
-			
-			return findCarrierInflections(completeData, carriersWithData, carrierSkipSet);
+			return inflectionMap;
 		}
-	}, [completeData, carriersWithData, inflectionSkipList, market, fuelCategory, isMultiCurveMode, curves]);
+	}, [completeData, carriersWithData, inflectionSkipList, market, fuelCategory, isMultiCurveMode, curves, additionalCurves, data, additionalCurveRawData]);
 
-	const getInflectionMarkerY = (inflectionPrice: number, carrier: string): number | null => {
-		const carrierKey = carrier === "UPS" ? "UPS" : carrier === "FedEx" ? "FedEx" : "DHL";
+	const getInflectionMarkerY = (inflectionPrice: number, carrierOrKey: string): number | null => {
+		// Check if this is an additional curve key (e.g., "FedEx_24")
+		const isAdditionalCurve = carrierOrKey.includes('_') && /\d/.test(carrierOrKey);
+		
+		if (isAdditionalCurve) {
+			// For additional curves, look in data with the dynamic column
+			const [carrier, curveId] = carrierOrKey.split('_');
+			const columnKey = `${carrier.toLowerCase()}_${curveId}_pct`;
+			
+			const bandAtInflection = data.find(
+				(row: any) => row.at_least_usd <= inflectionPrice && 
+				             row.but_less_than_usd > inflectionPrice &&
+				             row[columnKey] !== null && row[columnKey] !== undefined
+			);
+			
+			return bandAtInflection ? (bandAtInflection as any)[columnKey] : null;
+		}
+		
+		// Main carrier
+		const carrierKey = carrierOrKey === "UPS" ? "UPS" : carrierOrKey === "FedEx" ? "FedEx" : "DHL";
 		
 		const bandAtInflection = completeData.find(
 			row => row.at_least_usd <= inflectionPrice && row.but_less_than_usd > inflectionPrice
@@ -459,33 +562,52 @@ export default function ComparisonChart({
 	};
 
 	const isInflectionInView = (inflectionPrice: number): boolean => {
-		if (data.length === 0) return false;
-		const minPrice = Math.min(...data.map(r => r.at_least_usd));
-		const maxPrice = Math.max(...data.map(r => r.but_less_than_usd));
+		const activeData = isMultiCurveMode ? multiCurveChartData : chartData;
+		if (activeData.length === 0) return false;
+		const minPrice = Math.min(...activeData.map((r: any) => r.priceValue));
+		// Get max price from range strings
+		const maxPrices = activeData.map((d: any) => {
+			const parts = d.range?.split('-') || [];
+			const maxStr = parts[1] || '';
+			return parseFloat(maxStr.replace(/[$€]/g, '')) || 0;
+		});
+		const maxPrice = Math.max(...maxPrices);
 		return inflectionPrice >= minPrice && inflectionPrice <= maxPrice;
 	};
 
 	// Group inflections by price (for handling overlapping inflection points)
 	const inflectionsByPrice = useMemo(() => {
-		const grouped = new Map<number, Array<{ key: string; carrier: string; markerY: number | null }>>();
+		const grouped = new Map<number, Array<{ key: string; carrier: string; markerY: number | null; label: string }>>();
 		
 		Array.from(inflections.entries()).forEach(([key, inflectionPrice]) => {
 			if (!inflectionPrice || !isInflectionInView(inflectionPrice)) return;
 			
-			const carrier = key.includes('_') ? key.split('_')[0] : key;
+			// Check if this is an additional curve key (e.g., "FedEx_24")
+			const isAdditionalCurve = key.includes('_') && /\d/.test(key);
+			const carrier = key.split('_')[0];
+			
 			const markerY = isMultiCurveMode 
 				? getMultiCurveInflectionMarkerY(inflectionPrice, key)
-				: getInflectionMarkerY(inflectionPrice, carrier);
+				: getInflectionMarkerY(inflectionPrice, key);
+			
+			// Get label for additional curves
+			let label = carrier;
+			if (isAdditionalCurve && !isMultiCurveMode) {
+				const additionalCurve = additionalCurves.find(c => `${c.carrier}_${c.id}` === key);
+				if (additionalCurve) {
+					label = `${carrier} ${additionalCurve.label}`;
+				}
+			}
 			
 			if (!grouped.has(inflectionPrice)) {
 				grouped.set(inflectionPrice, []);
 			}
 			
-			grouped.get(inflectionPrice)!.push({ key, carrier, markerY });
+			grouped.get(inflectionPrice)!.push({ key, carrier, markerY, label });
 		});
 		
 		return grouped;
-	}, [inflections, isMultiCurveMode, data]);
+	}, [inflections, isMultiCurveMode, data, additionalCurves, chartData, multiCurveChartData]);
 
 	const inflectionPoints = useMemo(() => {
 		const points: Array<{
@@ -627,8 +749,11 @@ export default function ComparisonChart({
 									return `Price: ${currencySymbol}${price.toFixed(2)}`;
 								}}
 								formatter={(value: any, name: string, props: any) => {
+									if (value === null || value === undefined) return null;
 									const dataPoint = props.payload;
-									const isExtrapolated = dataPoint[`${name}_extrapolated`];
+									// Use dataKey for extrapolation check (name is display name, dataKey is the actual key)
+									const dataKey = props.dataKey || name;
+									const isExtrapolated = dataPoint[`${dataKey}_extrapolated`] === true;
 									const formattedValue = `${Number(value).toFixed(2)}%`;
 									if (isExtrapolated) {
 										return [formattedValue + " (Extrapolated, not published by carrier)", name];
@@ -671,8 +796,20 @@ export default function ComparisonChart({
 									dataKey="UPS"
 									stroke={getCarrierBrandColor("UPS")}
 									strokeWidth={3}
-									dot={{ fill: getCarrierBrandColor("UPS"), r: 2 }}
-											connectNulls={false}
+									dot={(props: any) => {
+										if (props.payload.UPS === null || props.payload.UPS === undefined) {
+											return <circle cx={0} cy={0} r={0} />;
+										}
+										return (
+											<circle
+												cx={props.cx}
+												cy={props.cy}
+												r={2}
+												fill={getCarrierBrandColor("UPS")}
+											/>
+										);
+									}}
+									connectNulls={false}
 								/>
 							)}
 							{(carriersWithData.length === 0 ||
@@ -683,13 +820,22 @@ export default function ComparisonChart({
 									stroke={getCarrierBrandColor("FedEx")}
 									strokeWidth={2}
 									strokeDasharray="5 5"
-									dot={{
-										fill: getCarrierBrandColor("FedEx"),
-										r: 2,
-										strokeWidth: 1,
-										stroke: getCarrierBrandColor("FedEx"),
+									dot={(props: any) => {
+										if (props.payload.FedEx === null || props.payload.FedEx === undefined) {
+											return <circle cx={0} cy={0} r={0} />;
+										}
+										return (
+											<circle
+												cx={props.cx}
+												cy={props.cy}
+												r={2}
+												fill={getCarrierBrandColor("FedEx")}
+												stroke={getCarrierBrandColor("FedEx")}
+												strokeWidth={1}
+											/>
+										);
 									}}
-											connectNulls={false}
+									connectNulls={false}
 								/>
 							)}
 							{(carriersWithData.length === 0 ||
@@ -699,90 +845,148 @@ export default function ComparisonChart({
 									dataKey="DHL"
 									stroke={getCarrierBrandColor("DHL")}
 									strokeWidth={2}
-									dot={{ fill: getCarrierBrandColor("DHL"), r: 4 }}
-											connectNulls={false}
+									dot={(props: any) => {
+										if (props.payload.DHL === null || props.payload.DHL === undefined) {
+											return <circle cx={0} cy={0} r={0} />;
+										}
+										return (
+											<circle
+												cx={props.cx}
+												cy={props.cy}
+												r={4}
+												fill={getCarrierBrandColor("DHL")}
+											/>
+										);
+									}}
+									connectNulls={false}
 								/>
 							)}
+							
+							{/* Additional (historical) curves */}
+							{additionalCurves.map((curve, index) => {
+								const chartKey = `${curve.carrier}_${curve.id}`;
+								// Get shifted color for historical curves
+								// Use index+1 so the first additional curve gets a distinct color shift
+								const shiftedColor = getCarrierColorVariant(
+									curve.carrier,
+									index + 1, // version index (1, 2, 3... for additional curves)
+									additionalCurves.length + 1, // total versions = active + additional
+									theme === 'dark' ? 'dark' : 'light'
+								);
+								const dashArray = curve.carrier === "FedEx" ? "8 4" : "4 4"; // Different dash for historical
+								
+								return (
+									<Line
+										key={chartKey}
+										type="stepAfter"
+										dataKey={chartKey}
+										name={`${curve.carrier} ${curve.label}`}
+										stroke={shiftedColor}
+										strokeWidth={2}
+										strokeDasharray={dashArray}
+										dot={(props: any) => {
+											// Only render dot if there's actual data at this point
+											const value = props.payload[chartKey];
+											if (value === null || value === undefined) {
+												return <circle cx={0} cy={0} r={0} />;
+											}
+											const isExtrapolated = props.payload[`${chartKey}_extrapolated`];
+											return (
+												<circle
+													cx={props.cx}
+													cy={props.cy}
+													r={2}
+													fill={shiftedColor}
+													opacity={isExtrapolated ? 0.5 : 1}
+												/>
+											);
+										}}
+										connectNulls={false}
+									/>
+								);
+							})}
 								</>
 							)}
 							{Array.from(inflectionsByPrice.entries()).map(([inflectionPrice, carriersAtPrice], groupIndex) => {
-								// Pick the first carrier's color for the line (if multiple, they'll share the line)
+								// For multiple inflections at same price, use the most prominent carrier's color
+								// but show all info in tooltip
+								const hasMultiple = carriersAtPrice.length > 1;
 								const firstCarrier = carriersAtPrice[0].carrier;
 								const carrierColor = getCarrierBrandColor(firstCarrier);
 								
-								// Create label: if multiple carriers at same price, show count
-								const label = carriersAtPrice.length === 1
-									? (isMultiCurveMode
-										? `${curves?.find((c: CurveData) => `${c.carrier}_${c.curve_id}` === carriersAtPrice[0].key)?.label || carriersAtPrice[0].key} - ${currencySymbol}${inflectionPrice.toFixed(2)}`
-										: `${firstCarrier} - ${currencySymbol}${inflectionPrice.toFixed(2)}`)
-									: `${carriersAtPrice.length} Inflections - ${currencySymbol}${inflectionPrice.toFixed(2)}`;
+								// Create label showing all carriers if multiple
+								const label = hasMultiple
+									? `${carriersAtPrice.map(c => c.carrier).join(' & ')} - ${currencySymbol}${inflectionPrice.toFixed(2)}`
+									: (isMultiCurveMode
+										? `${curves?.find((c: CurveData) => `${c.carrier}_${c.curve_id}` === carriersAtPrice[0].key)?.label || carriersAtPrice[0].label || carriersAtPrice[0].key} - ${currencySymbol}${inflectionPrice.toFixed(2)}`
+										: `${carriersAtPrice[0].label || firstCarrier} - ${currencySymbol}${inflectionPrice.toFixed(2)}`);
+
+								// Use different dash patterns if multiple inflections overlap
+								const dashPattern = hasMultiple ? "4 2 8 2" : "8 4";
 
 								return (
 									<ReferenceLine
 										key={`inflection-${inflectionPrice}`}
 										x={inflectionPrice}
-										stroke={carrierColor}
-										strokeWidth={2.5}
-										strokeDasharray="8 4"
+										stroke={hasMultiple ? "#ffffff" : carrierColor}
+										strokeWidth={hasMultiple ? 3 : 2.5}
+										strokeDasharray={dashPattern}
 										label={{
 											value: label,
 											position: 'top',
-											fill: carrierColor,
-											fontSize: 12,
+											fill: hasMultiple ? "#ffffff" : carrierColor,
+											fontSize: 11,
 											fontWeight: 'bold',
-											offset: 10 + (groupIndex * 15),
-										}}
-										cursor={{
-											stroke: carrierColor,
-											strokeWidth: 3,
-											strokeDasharray: '5 5',
+											offset: 10,
 										}}
 										style={{ cursor: 'pointer' }}
 										onMouseEnter={(e: any) => {
 											const tooltip = document.createElement('div');
 											tooltip.id = `inflection-tooltip-${inflectionPrice}`;
 											tooltip.style.position = 'fixed';
-											tooltip.style.background = 'rgba(0, 0, 0, 0.95)';
-											tooltip.style.border = `3px solid ${carrierColor}`;
-											tooltip.style.borderRadius = '10px';
-											tooltip.style.padding = '12px 16px';
+											tooltip.style.background = 'rgba(15, 15, 20, 0.98)';
+											tooltip.style.border = hasMultiple ? '2px solid rgba(255,255,255,0.3)' : `2px solid ${carrierColor}`;
+											tooltip.style.borderRadius = '12px';
+											tooltip.style.padding = '14px 18px';
 											tooltip.style.color = 'white';
 											tooltip.style.fontSize = '13px';
 											tooltip.style.pointerEvents = 'none';
 											tooltip.style.zIndex = '9999';
-											tooltip.style.left = `${e.clientX + 10}px`;
-											tooltip.style.top = `${e.clientY + 10}px`;
+											tooltip.style.left = `${e.clientX + 15}px`;
+											tooltip.style.top = `${e.clientY - 10}px`;
+											tooltip.style.minWidth = '200px';
+											tooltip.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
 											
-											// Build tooltip content for all carriers at this price
+											// Build tooltip content for ALL carriers at this price
 											let tooltipHTML = `
-												<div style="font-weight: bold; margin-bottom: 8px;">
-													📍 Inflection Point${carriersAtPrice.length > 1 ? 's' : ''}
+												<div style="font-weight: 600; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+													<span style="font-size: 16px;">📍</span> Inflection Point${hasMultiple ? 's' : ''}
 												</div>
-												<div style="margin-bottom: 8px;">
-													Price: <strong>${currencySymbol}${inflectionPrice.toFixed(2)}</strong>
+												<div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+													<span style="color: #999; font-size: 12px;">Price:</span> <strong style="font-size: 15px;">${currencySymbol}${inflectionPrice.toFixed(2)}</strong>
 												</div>
 											`;
 											
 											carriersAtPrice.forEach((item, idx) => {
 												const itemCarrierColor = getCarrierBrandColor(item.carrier);
 												const itemLabel = isMultiCurveMode
-													? curves?.find((c: CurveData) => `${c.carrier}_${c.curve_id}` === item.key)?.label || item.carrier
-													: item.carrier;
+													? curves?.find((c: CurveData) => `${c.carrier}_${c.curve_id}` === item.key)?.label || item.label || item.carrier
+													: item.label || item.carrier;
 												
 												tooltipHTML += `
-													<div style="margin-bottom: 6px; padding: 6px; background: rgba(255,255,255,0.05); border-radius: 6px; border-left: 3px solid ${itemCarrierColor};">
-														<div style="font-weight: bold; color: ${itemCarrierColor}; margin-bottom: 2px;">
+													<div style="margin-bottom: ${idx < carriersAtPrice.length - 1 ? '10px' : '0'}; padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: 8px; border-left: 3px solid ${itemCarrierColor};">
+														<div style="font-weight: 600; color: ${itemCarrierColor}; margin-bottom: 4px; font-size: 13px;">
 															${itemLabel}
 														</div>
-														<div style="font-size: 12px;">
-															Surcharge: <strong>${item.markerY?.toFixed(2)}%</strong>
+														<div style="font-size: 12px; color: #ccc;">
+															Surcharge: <strong style="color: white;">${item.markerY?.toFixed(2)}%</strong>
 														</div>
 													</div>
 												`;
 											});
 											
 											tooltipHTML += `
-												<div style="font-size: 11px; color: #999; font-style: italic; margin-top: 8px;">
+												<div style="font-size: 11px; color: #666; font-style: italic; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
 													Step width changes from wide to narrow
 												</div>
 											`;
@@ -793,8 +997,8 @@ export default function ComparisonChart({
 										onMouseMove={(e: any) => {
 											const tooltip = document.getElementById(`inflection-tooltip-${inflectionPrice}`);
 											if (tooltip) {
-												tooltip.style.left = `${e.clientX + 10}px`;
-												tooltip.style.top = `${e.clientY + 10}px`;
+												tooltip.style.left = `${e.clientX + 15}px`;
+												tooltip.style.top = `${e.clientY - 10}px`;
 											}
 										}}
 										onMouseLeave={() => {
@@ -875,8 +1079,11 @@ export default function ComparisonChart({
 									return `Price: ${currencySymbol}${price.toFixed(2)}`;
 								}}
 								formatter={(value: any, name: string, props: any) => {
+									if (value === null || value === undefined) return null;
 									const dataPoint = props.payload;
-									const isExtrapolated = dataPoint[`${name}_extrapolated`];
+									// Use dataKey for extrapolation check (name is display name, dataKey is the actual key)
+									const dataKey = props.dataKey || name;
+									const isExtrapolated = dataPoint[`${dataKey}_extrapolated`] === true;
 									const formattedValue = `${Number(value).toFixed(2)}%`;
 									if (isExtrapolated) {
 										return [formattedValue + " (Extrapolated, not published by carrier)", name];
@@ -935,6 +1142,28 @@ export default function ComparisonChart({
 											fillOpacity={(entry: any) => entry.DHL_extrapolated ? getExtrapolatedOpacity() : 1}
 								/>
 									)}
+									
+									{/* Additional (historical) curve bars */}
+									{additionalCurves.map((curve, index) => {
+										const chartKey = `${curve.carrier}_${curve.id}`;
+										const shiftedColor = getCarrierColorVariant(
+											curve.carrier,
+											index + 1,
+											additionalCurves.length + 1,
+											theme === 'dark' ? 'dark' : 'light'
+										);
+										
+										return (
+											<Bar
+												key={chartKey}
+												dataKey={chartKey}
+												name={`${curve.carrier} ${curve.label}`}
+												fill={shiftedColor}
+												barSize={barSize}
+												fillOpacity={(entry: any) => entry[`${chartKey}_extrapolated`] ? getExtrapolatedOpacity() : 1}
+											/>
+										);
+									})}
 								</>
 							)}
 						</BarChart>

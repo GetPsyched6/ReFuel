@@ -5,7 +5,7 @@
  * For example: first half uses $0.09 steps, then after inflection switches to $0.04 steps.
  */
 
-interface Band {
+export interface Band {
 	at_least_usd: number;
 	but_less_than_usd: number;
 	surcharge_pct: number;

@@ -20,10 +20,12 @@ import {
 	Grid,
 	Infinity as InfinityIcon,
 	Ruler,
+	GitBranch,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { historyApi, metadataApi } from "@/services/api";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import FuelCurveSelector, { SelectedCurve } from "@/components/filters/FuelCurveSelector";
 import * as Tabs from "@radix-ui/react-tabs";
 
 interface Session {
@@ -95,6 +97,9 @@ export default function Dashboard() {
 	const [comparisonHasData, setComparisonHasData] = useState(true);
 	const [userCarriersOverride, setUserCarriersOverride] = useState(false);
 	const prevCountryRef = useRef<string | null>(null);
+
+	// Selected fuel curves from the FuelCurveSelector
+	const [selectedFuelCurves, setSelectedFuelCurves] = useState<SelectedCurve[]>([]);
 
 
 	// Switch away from comparable view if only one carrier has data
@@ -435,7 +440,7 @@ export default function Dashboard() {
 										animate={{ opacity: 1, y: 0 }}
 										className="backdrop-blur-xl bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/40 p-4 rounded-2xl shadow-2xl"
 									>
-										<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+										<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-0">
 											<div className="flex-1 min-w-[260px]">
 												<div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
 													<Layers className="w-4 h-4 text-amber-500" />
@@ -446,6 +451,23 @@ export default function Dashboard() {
 													value={activeView}
 													onChange={(value) => setActiveView(value as ViewMode)}
 													placeholder="Select view"
+												/>
+											</div>
+											
+											{/* Divider */}
+											<div className="hidden lg:block w-px bg-gray-300/50 dark:bg-gray-600/50 mx-6 self-stretch" />
+											
+											<div className="flex-1 min-w-[260px]">
+												<div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+													<GitBranch className="w-4 h-4 text-amber-500" />
+													Select Fuel Curves
+												</div>
+												<FuelCurveSelector
+													carriers={selectedCarriers}
+													market={selectedCountry}
+													fuelCategory={selectedServiceType}
+													sessionId={currentSessionId || undefined}
+													onSelectionChange={setSelectedFuelCurves}
 												/>
 											</div>
 										</div>
@@ -459,6 +481,7 @@ export default function Dashboard() {
 									fuelCategory={selectedServiceType}
 									market={selectedCountry}
 									carriers={selectedCarriers}
+									selectedCurves={selectedFuelCurves}
 									onCarriersWithDataChange={setCarriersWithData}
 									onHasDataChange={setComparisonHasData}
 								/>

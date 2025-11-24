@@ -412,23 +412,29 @@ export default function GlobalFilters({
 					</div>
 				</div>
 
+				{/* Raw Data Button - same height as filter dropdowns */}
 				{sessionId && (
-					<div className="mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+					<div className="flex-shrink-0">
+						<label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+							&nbsp;
+						</label>
 						<button
 							onClick={() => setRawDataModalOpen(true)}
 							className={cn(
-								"w-full px-4 py-2 rounded-xl",
-								"backdrop-blur-xl bg-gray-100/60 dark:bg-gray-800/60",
-								"border border-gray-300/50 dark:border-gray-600/50",
-								"hover:bg-gray-200/80 dark:hover:bg-gray-700/80",
-								"hover:border-gray-400 dark:hover:border-gray-500",
-								"flex items-center justify-center gap-2",
-								"text-sm font-medium text-gray-700 dark:text-gray-300",
-								"transition-all duration-200"
+								"px-4 py-2.5 rounded-xl",
+								"backdrop-blur-xl bg-white/80 dark:bg-gray-800/80",
+								"border-2 border-gray-200 dark:border-gray-700",
+								"hover:border-amber-400 dark:hover:border-amber-500",
+								"hover:bg-amber-50/50 dark:hover:bg-amber-900/20",
+								"flex items-center gap-2",
+								"text-gray-900 dark:text-gray-100 font-medium",
+								"shadow-lg hover:shadow-xl",
+								"transition-all duration-200",
+								"focus:outline-none"
 							)}
 						>
-							<Database className="w-4 h-4" />
-							Show Raw Data
+							<Database className="w-4 h-4 text-amber-500" />
+							<span>Raw Data</span>
 						</button>
 						<RawDataModal
 							open={rawDataModalOpen}

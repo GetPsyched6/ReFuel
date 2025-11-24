@@ -1,277 +1,410 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { X, Layers, ChevronDown } from "lucide-react";
-import { fuelCurveApi } from "@/services/api";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ChevronDown, Check, GitBranch } from "lucide-react";
+import { cn } from "@/utils/cn";
+import { getCarrierColor } from "@/theme/carriers";
 
-interface CurveVersion {
+interface FuelCurveVersion {
 	id: number;
 	carrier: string;
 	service: string;
 	market: string;
 	fuel_category: string;
-	fuel_type: string;
 	effective_date: string;
 	label: string;
-	session_id: number;
 	is_active: boolean;
 }
 
-interface FuelCurveSelectorProps {
-	selectedCarriers: string[];
-	market: string;
-	fuelCategory: string;
-	selectedCurveVersions: Map<string, number[]>;
-	onSelectionChange: (selections: Map<string, number[]>) => void;
+export interface SelectedCurve {
+	id: number;
+	carrier: string;
+	label: string;
+	effectiveDate: string;
+	isActive: boolean;
 }
 
-export function FuelCurveSelector({
-	selectedCarriers,
+interface FuelCurveSelectorProps {
+	carriers: string[];
+	market: string;
+	fuelCategory: string;
+	sessionId?: number;
+	onSelectionChange?: (selectedCurves: SelectedCurve[]) => void;
+}
+
+// Format a fuel curve label from the data we have
+function formatCurveLabel(version: FuelCurveVersion): string {
+	const date = new Date(version.effective_date);
+	const monthNames = [
+		"Jan",
+		"Feb",
+		"Mar",
+		"Apr",
+		"May",
+		"Jun",
+		"Jul",
+		"Aug",
+		"Sep",
+		"Oct",
+		"Nov",
+		"Dec",
+	];
+	const month = monthNames[date.getMonth()];
+	const year = date.getFullYear();
+
+	// Use label if it's descriptive, otherwise generate from date
+	if (version.is_active) {
+		return `Current (${month} ${year})`;
+	} else {
+		// Historical curve - use the label or generate one
+		if (version.label && !version.label.startsWith("Fuel curve")) {
+			return version.label;
+		}
+		return `Historical (${month} ${year})`;
+	}
+}
+
+export default function FuelCurveSelector({
+	carriers,
 	market,
 	fuelCategory,
-	selectedCurveVersions,
 	onSelectionChange,
 }: FuelCurveSelectorProps) {
-	const [open, setOpen] = useState(false);
-	const [availableVersions, setAvailableVersions] = useState<
-		Record<string, CurveVersion[]>
-	>({});
-	const [loading, setLoading] = useState(false);
+	const [popoverOpen, setPopoverOpen] = useState(false);
+	const [curveVersions, setCurveVersions] = useState<FuelCurveVersion[]>([]);
+	const [selectedCurves, setSelectedCurves] = useState<Map<string, number[]>>(
+		new Map()
+	);
+	const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
+
+	// Notify parent when selection changes
+	useEffect(() => {
+		if (onSelectionChange) {
+			const allSelected: SelectedCurve[] = [];
+			selectedCurves.forEach((ids) => {
+				for (const id of ids) {
+					const version = curveVersions.find((v) => v.id === id);
+					if (version) {
+						allSelected.push({
+							id: version.id,
+							carrier: version.carrier,
+							label: formatCurveLabel(version),
+							effectiveDate: version.effective_date,
+							isActive: version.is_active,
+						});
+					}
+				}
+			});
+			onSelectionChange(allSelected);
+		}
+	}, [selectedCurves, curveVersions, onSelectionChange]);
 
 	// Fetch available curve versions when filters change
 	useEffect(() => {
-		if (selectedCarriers.length === 0 || !market || !fuelCategory) {
-			setAvailableVersions({});
-			onSelectionChange(new Map());
-			return;
-		}
-
-		const fetchVersions = async () => {
-			setLoading(true);
+		const fetchCurveVersions = async () => {
 			try {
-				console.log('🔍 FuelCurveSelector fetching versions:', {
+				const params = new URLSearchParams({
 					market,
-					fuelCategory,
-					selectedCarriers
+					fuel_category: fuelCategory,
+					carriers: carriers.join(","),
 				});
-				const response = await fuelCurveApi.getVersions(
-					market,
-					fuelCategory,
-					selectedCarriers
+				const response = await fetch(
+					`/api/fuel-curves/versions?${params.toString()}`
 				);
-				console.log('✅ FuelCurveSelector received versions:', response.data);
-				const versions = response.data.versions_by_carrier || {};
-				setAvailableVersions(versions);
-				console.log('📦 Available versions state set:', versions);
+				if (response.ok) {
+					const data = await response.json();
+					const allVersions: FuelCurveVersion[] = data.versions || [];
 
-				// Auto-select ONLY active curves
-				const newSelections = new Map<string, number[]>();
-				Object.entries(versions).forEach(([carrier, carrierVersions]) => {
-					const activeCurves = (carrierVersions as CurveVersion[])
-						.filter((v) => v.is_active)
-						.map((v) => v.id);
-					if (activeCurves.length > 0) {
-						newSelections.set(carrier, activeCurves);
+					setCurveVersions(allVersions);
+
+					// Auto-select active curves for each carrier
+					const initialSelection = new Map<string, number[]>();
+					for (const carrier of carriers) {
+						const carrierVersions = allVersions.filter(
+							(v: FuelCurveVersion) => v.carrier === carrier && v.is_active
+						);
+						if (carrierVersions.length > 0) {
+							initialSelection.set(
+								carrier,
+								carrierVersions.map((v: FuelCurveVersion) => v.id)
+							);
+						}
 					}
-				});
-				console.log('✨ Auto-selected active curves:', Array.from(newSelections.entries()));
-				onSelectionChange(newSelections);
+					setSelectedCurves(initialSelection);
+				}
 			} catch (error) {
-				console.error("❌ Failed to fetch fuel curve versions:", error);
-				setAvailableVersions({});
-				onSelectionChange(new Map());
-			} finally {
-				setLoading(false);
+				console.error("Failed to fetch curve versions:", error);
 			}
 		};
 
-		fetchVersions();
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedCarriers, market, fuelCategory]);
-
-	const toggleCurveVersion = (carrier: string, versionId: number) => {
-		const newSelections = new Map(selectedCurveVersions);
-		const current = newSelections.get(carrier) || [];
-
-		if (current.includes(versionId)) {
-			// Remove version
-			const updated = current.filter((id) => id !== versionId);
-			if (updated.length === 0) {
-				newSelections.delete(carrier);
-			} else {
-				newSelections.set(carrier, updated);
-			}
-		} else {
-			// Add version
-			newSelections.set(carrier, [...current, versionId]);
+		if (carriers.length > 0) {
+			fetchCurveVersions();
 		}
+	}, [carriers, market, fuelCategory]);
 
-		onSelectionChange(newSelections);
-	};
+	// Group versions by carrier
+	const versionsByCarrier = useMemo(() => {
+		const grouped = new Map<string, FuelCurveVersion[]>();
+		for (const carrier of carriers) {
+			grouped.set(
+				carrier,
+				curveVersions.filter((v) => v.carrier === carrier)
+			);
+		}
+		return grouped;
+	}, [curveVersions, carriers]);
 
-	const getSelectedCount = () => {
+	// Calculate summary for button text
+	const totalCurves = useMemo(() => {
 		let count = 0;
-		selectedCurveVersions.forEach((versions) => {
-			count += versions.length;
+		selectedCurves.forEach((ids) => {
+			count += ids.length;
 		});
 		return count;
+	}, [selectedCurves]);
+
+	const carriersWithCurves = useMemo(() => {
+		let count = 0;
+		selectedCurves.forEach((ids) => {
+			if (ids.length > 0) count++;
+		});
+		return count;
+	}, [selectedCurves]);
+
+	const toggleCurve = (carrier: string, curveId: number) => {
+		setSelectedCurves((prev) => {
+			const newMap = new Map(prev);
+			const current = newMap.get(carrier) || [];
+
+			if (current.includes(curveId)) {
+				// Don't allow deselecting the last curve
+				if (current.length > 1) {
+					newMap.set(
+						carrier,
+						current.filter((id) => id !== curveId)
+					);
+				}
+			} else {
+				newMap.set(carrier, [...current, curveId]);
+			}
+
+			return newMap;
+		});
 	};
 
-	const getButtonText = () => {
-		const count = getSelectedCount();
-		if (count === 0) return "Select Fuel Curves";
-		if (count === 1) return "1 curve selected";
-		
-		// Check if multiple carriers
-		const carrierCount = selectedCurveVersions.size;
-		if (carrierCount === 1) {
-			return `${count} curves selected`;
-		}
-		return `${count} curves from ${carrierCount} carriers`;
+	const toggleDropdown = (carrier: string, open: boolean) => {
+		setOpenDropdowns((prev) => {
+			const newSet = new Set(prev);
+			if (open) {
+				newSet.add(carrier);
+			} else {
+				newSet.delete(carrier);
+			}
+			return newSet;
+		});
 	};
 
 	return (
-		<Popover.Root open={open} onOpenChange={setOpen}>
+		<Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
 			<Popover.Trigger asChild>
 				<button
-					className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-700/80 transition-colors font-medium text-gray-900 dark:text-gray-100"
-				>
-					<Layers className="w-4 h-4" />
-					<span className="text-sm">{getButtonText()}</span>
-					{loading && (
-						<div className="w-4 h-4 border-2 border-gray-300 border-t-amber-500 rounded-full animate-spin" />
+					className={cn(
+						"w-full px-4 py-2.5 rounded-xl",
+						"backdrop-blur-xl bg-white/80 dark:bg-gray-800/80",
+						"border-2 border-gray-200 dark:border-gray-700",
+						"hover:border-amber-400 dark:hover:border-amber-500",
+						"data-[state=open]:border-amber-500 dark:data-[state=open]:border-amber-400",
+						"data-[state=open]:ring-4 data-[state=open]:ring-amber-500/20",
+						"flex items-center justify-between gap-3",
+						"text-left text-gray-900 dark:text-gray-100",
+						"shadow-lg hover:shadow-xl",
+						"transition-all duration-200",
+						"focus:outline-none"
 					)}
+				>
+					<div className="flex items-center gap-3">
+						<span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100/80 dark:bg-gray-700/60 text-amber-600 dark:text-amber-400 flex-shrink-0">
+							<GitBranch className="w-4 h-4" />
+						</span>
+						<div className="flex flex-col min-w-0">
+							<span className="font-semibold text-sm leading-tight">
+								{totalCurves} Fuel Curve{totalCurves !== 1 ? "s" : ""}
+							</span>
+							<span className="text-xs text-gray-600 dark:text-gray-400 leading-tight">
+								from {carriersWithCurves} carrier
+								{carriersWithCurves !== 1 ? "s" : ""}
+							</span>
+						</div>
+					</div>
+					<ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />
 				</button>
 			</Popover.Trigger>
 
 			<Popover.Portal>
 				<Popover.Content
-					className="z-50 w-[520px] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+					className={cn(
+						"backdrop-blur-xl bg-white/95 dark:bg-gray-800/95",
+						"border-2 border-gray-200 dark:border-gray-700",
+						"rounded-2xl shadow-2xl",
+						"p-5",
+						"z-[9999]",
+						"min-w-[380px] max-w-[450px]"
+					)}
+					sideOffset={12}
 					align="start"
-					sideOffset={8}
 				>
-					{/* Header */}
-					<div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-						<div className="flex items-center justify-between">
-							<div>
-								<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-									Select Fuel Curves
-								</h3>
-								<p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-									Choose versions to compare
-								</p>
-							</div>
-							<Popover.Close asChild>
-								<button className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-									<X className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-								</button>
-							</Popover.Close>
+					<div className="space-y-4">
+						<div className="flex items-center gap-2 pb-3 border-b border-gray-200 dark:border-gray-700">
+							<GitBranch className="w-5 h-5 text-amber-500" />
+							<h3 className="font-semibold text-gray-900 dark:text-gray-100">
+								Select Fuel Curves
+							</h3>
 						</div>
-					</div>
 
-					{/* Content */}
-					<div className="p-4">
-						{loading ? (
-							<div className="text-center py-8">
-								<div className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm">
-									<div className="w-4 h-4 border-2 border-gray-300 border-t-amber-500 rounded-full animate-spin" />
-									<span>Loading curves...</span>
-								</div>
-							</div>
-						) : selectedCarriers.length === 0 ? (
-							<div className="text-center py-8">
-								<Layers className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-								<p className="text-sm text-gray-600 dark:text-gray-400">
-									No carriers selected
-								</p>
-							</div>
-						) : (
-							<div className="space-y-2 max-h-[400px] overflow-y-auto">
-								{selectedCarriers.map((carrier) => {
-									const versions = availableVersions[carrier] || [];
-									const selectedVersionIds = selectedCurveVersions.get(carrier) || [];
-									console.log(`📋 Rendering ${carrier}:`, {
-										versionsCount: versions.length,
-										versions: versions,
-										selectedIds: selectedVersionIds
-									});
+						<div className="space-y-3">
+							{carriers.map((carrier) => {
+								const versions = versionsByCarrier.get(carrier) || [];
+								const selected = selectedCurves.get(carrier) || [];
+								const carrierColor = getCarrierColor(carrier);
+								const isDropdownOpen = openDropdowns.has(carrier);
 
-									// Carrier colors
-									const carrierAccents: Record<string, string> = {
-										UPS: "border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-900/10",
-										FedEx: "border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10",
-										DHL: "border-l-red-500 bg-red-50/50 dark:bg-red-900/10",
-									};
+								// Get display text for the dropdown
+								let dropdownText = "No curves available";
+								if (versions.length > 0) {
+									if (selected.length === 0) {
+										dropdownText = "Select curve...";
+									} else if (selected.length === 1) {
+										const selectedVersion = versions.find(
+											(v) => v.id === selected[0]
+										);
+										dropdownText = selectedVersion
+											? formatCurveLabel(selectedVersion)
+											: "Current Fuel Curve";
+									} else {
+										dropdownText = `${selected.length} curves selected`;
+									}
+								}
 
-									const accentClass = carrierAccents[carrier] || "border-l-gray-400 bg-gray-50 dark:bg-gray-900/30";
-
-									return (
-										<div
-											key={carrier}
-											className={`rounded-md border border-gray-200 dark:border-gray-700 ${accentClass} border-l-[3px] overflow-hidden`}
-										>
-											<div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-												<span className="font-medium text-sm text-gray-900 dark:text-gray-100">
-													{carrier}
-												</span>
-												{versions.length > 0 && (
-													<span className="text-xs text-gray-500 dark:text-gray-400">
-														{selectedVersionIds.length} of {versions.length} selected
-													</span>
-												)}
-											</div>
-
-											<div className="p-2 bg-white dark:bg-gray-800">
-												{versions.length === 0 ? (
-													<div className="text-xs text-gray-500 dark:text-gray-400 text-center py-2">
-														No versions available
-													</div>
-												) : (
-													<div className="space-y-1">
-														{versions.map((version) => (
-															<label
-																key={version.id}
-																className="flex items-start gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors group"
-															>
-																<input
-																	type="checkbox"
-																	checked={selectedVersionIds.includes(version.id)}
-																	onChange={() => toggleCurveVersion(carrier, version.id)}
-																	className="mt-0.5 w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-2 focus:ring-gray-400 focus:ring-offset-0 dark:border-gray-600 dark:bg-gray-700 cursor-pointer"
-																/>
-																<div className="flex-1 min-w-0">
-																	<div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-																		{version.label}
-																	</div>
-																	<div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-																		{version.service}
-																	</div>
-																</div>
-															</label>
-														))}
-													</div>
-												)}
-											</div>
+								return (
+									<div key={carrier} className="flex items-center gap-4">
+										{/* Carrier name with color indicator */}
+										<div className="flex items-center gap-2 min-w-[80px]">
+											<div
+												className="w-3 h-3 rounded-full"
+												style={{ backgroundColor: carrierColor }}
+											/>
+											<span className="font-medium text-gray-800 dark:text-gray-200">
+												{carrier}
+											</span>
 										</div>
-									);
-								})}
-							</div>
-						)}
+
+										{/* Curve dropdown */}
+										<DropdownMenu.Root
+											open={isDropdownOpen}
+											onOpenChange={(open) => toggleDropdown(carrier, open)}
+										>
+											<DropdownMenu.Trigger asChild>
+												<button
+													disabled={versions.length === 0}
+													className={cn(
+														"flex-1 px-3 py-2 rounded-xl",
+														"bg-gray-100/80 dark:bg-gray-700/80",
+														"border border-gray-200 dark:border-gray-600",
+														"hover:border-gray-300 dark:hover:border-gray-500",
+														"data-[state=open]:border-amber-400 dark:data-[state=open]:border-amber-500",
+														"flex items-center justify-between gap-2",
+														"text-sm text-gray-700 dark:text-gray-300",
+														"transition-all duration-150",
+														"focus:outline-none",
+														versions.length === 0 &&
+															"opacity-50 cursor-not-allowed"
+													)}
+												>
+													<span className="truncate">{dropdownText}</span>
+													<ChevronDown className="w-4 h-4 flex-shrink-0 text-gray-400" />
+												</button>
+											</DropdownMenu.Trigger>
+
+											<DropdownMenu.Portal>
+												<DropdownMenu.Content
+													className={cn(
+														"backdrop-blur-xl bg-white/95 dark:bg-gray-800/95",
+														"border border-gray-200 dark:border-gray-700",
+														"rounded-xl shadow-xl",
+														"p-1.5",
+														"z-[10000]",
+														"min-w-[220px]"
+													)}
+													sideOffset={6}
+													align="start"
+												>
+													{versions.length === 0 ? (
+														<div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+															No curves available
+														</div>
+													) : (
+														versions.map((version) => {
+															const isSelected = selected.includes(version.id);
+															return (
+																<DropdownMenu.Item
+																	key={version.id}
+																	className={cn(
+																		"flex items-center gap-2 px-3 py-2 rounded-lg",
+																		"cursor-pointer outline-none",
+																		"hover:bg-gray-100 dark:hover:bg-gray-700/50",
+																		"transition-colors",
+																		isSelected &&
+																			"bg-amber-50 dark:bg-amber-900/20"
+																	)}
+																	onSelect={(e) => {
+																		e.preventDefault();
+																		toggleCurve(carrier, version.id);
+																	}}
+																>
+																	<div
+																		className={cn(
+																			"w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0",
+																			isSelected
+																				? "bg-amber-500 border-amber-500"
+																				: "border-gray-300 dark:border-gray-600"
+																		)}
+																	>
+																		{isSelected && (
+																			<Check className="w-3 h-3 text-white" />
+																		)}
+																	</div>
+																	<span
+																		className={cn(
+																			"text-sm",
+																			isSelected
+																				? "text-amber-700 dark:text-amber-400 font-medium"
+																				: "text-gray-700 dark:text-gray-300"
+																		)}
+																	>
+																		{formatCurveLabel(version)}
+																	</span>
+																</DropdownMenu.Item>
+															);
+														})
+													)}
+												</DropdownMenu.Content>
+											</DropdownMenu.Portal>
+										</DropdownMenu.Root>
+									</div>
+								);
+							})}
+						</div>
+
+						{/* Info footer */}
+						<div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+							<p className="text-xs text-gray-500 dark:text-gray-400">
+								Select multiple fuel curve versions to compare historical
+								changes.
+							</p>
+						</div>
 					</div>
 
-					{/* Footer */}
-					<div className="px-5 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
-						<div className="text-sm text-gray-600 dark:text-gray-400">
-							<span className="font-medium text-gray-900 dark:text-gray-100">
-								{getSelectedCount()}
-							</span>
-							{" "}curve{getSelectedCount() !== 1 ? "s" : ""} selected
-						</div>
-						<Popover.Close asChild>
-							<button className="px-4 py-1.5 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors">
-								Apply
-							</button>
-						</Popover.Close>
-					</div>
+					<Popover.Arrow className="fill-white dark:fill-gray-800" />
 				</Popover.Content>
 			</Popover.Portal>
 		</Popover.Root>

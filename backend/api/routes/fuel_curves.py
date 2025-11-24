@@ -85,8 +85,25 @@ async def get_fuel_curve_versions(
             "is_active": bool(row["is_active"])
         })
     
+    # Also create a flat list for easier consumption
+    versions_flat = []
+    for row in rows:
+        versions_flat.append({
+            "id": row["id"],
+            "carrier": row["carrier"],
+            "service": row["service"],
+            "market": row["market"],
+            "fuel_category": row["fuel_category"],
+            "fuel_type": row["fuel_type"],
+            "effective_date": row["effective_date"],
+            "label": row["label"],
+            "session_id": row["session_id"],
+            "is_active": bool(row["is_active"])
+        })
+    
     return {
         "versions_by_carrier": versions_by_carrier,
+        "versions": versions_flat,
         "total_versions": len(rows)
     }
 

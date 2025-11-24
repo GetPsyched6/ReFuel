@@ -12,6 +12,8 @@ export interface RawBand {
 	ups_extrapolated?: boolean;
 	fedex_extrapolated?: boolean;
 	dhl_extrapolated?: boolean;
+	// Allow dynamic keys for additional curves (e.g., fedex_24_pct)
+	[key: string]: number | boolean | null | undefined;
 }
 
 export type ViewType = 'normalized' | 'normalized_fine' | 'overlap' | 'complete' | 'comparable' | 'raw';
@@ -60,6 +62,30 @@ function normalizeToStepWidth(data: RawBand[], stepWidth: number): RawBand[] {
 	console.log(`  📏 Normalizing to step width ${stepWidth}, range: $${minPrice.toFixed(2)} - $${maxPrice.toFixed(2)}`);
 	console.log(`  📦 Source data has ${data.length} bands`);
 	
+	// Detect any additional curve columns (e.g., fedex_24_pct, ups_15_pct)
+	// These are dynamic columns for historical/additional curve versions
+	// IMPORTANT: Scan ALL rows since not every row has every column
+	const additionalCurveColumnsSet = new Set<string>();
+	const additionalCurveExtrapolatedSet = new Set<string>();
+	for (const row of data) {
+		for (const key of Object.keys(row)) {
+			// Match pattern like "fedex_24_pct" or "ups_15_pct" (carrier_id_pct)
+			if (key.match(/^(ups|fedex|dhl)_\d+_pct$/i)) {
+				additionalCurveColumnsSet.add(key);
+			}
+			// Also detect extrapolation flags like "fedex_24_extrapolated"
+			if (key.match(/^(ups|fedex|dhl)_\d+_extrapolated$/i)) {
+				additionalCurveExtrapolatedSet.add(key);
+			}
+		}
+	}
+	const additionalCurveColumns = Array.from(additionalCurveColumnsSet);
+	const additionalCurveExtrapolatedColumns = Array.from(additionalCurveExtrapolatedSet);
+	if (additionalCurveColumns.length > 0) {
+		console.log(`  📊 Found additional curve columns:`, additionalCurveColumns);
+		console.log(`  📊 Found additional curve extrapolated flags:`, additionalCurveExtrapolatedColumns);
+	}
+	
 	// Log FedEx source bands in the extrapolated backward range for debugging
 	const backwardBands = data.filter(d => d.fedex_pct !== null && d.but_less_than_usd <= 3.55 && d.fedex_extrapolated);
 	if (backwardBands.length > 0) {
@@ -76,9 +102,9 @@ function normalizeToStepWidth(data: RawBand[], stepWidth: number): RawBand[] {
 		const nextPrice = parseFloat((currentPrice + stepWidth).toFixed(2));
 		
 		// Find source bands that overlap with this normalized range
-		const sourceUPS = findOverlappingBand(data, currentPrice, nextPrice, 'UPS');
-		const sourceFedEx = findOverlappingBand(data, currentPrice, nextPrice, 'FedEx');
-		const sourceDHL = findOverlappingBand(data, currentPrice, nextPrice, 'DHL');
+		const sourceUPS = findOverlappingBand(data, currentPrice, nextPrice, 'ups_pct');
+		const sourceFedEx = findOverlappingBand(data, currentPrice, nextPrice, 'fedex_pct');
+		const sourceDHL = findOverlappingBand(data, currentPrice, nextPrice, 'dhl_pct');
 		
 		// Debug first 5 FedEx lookups in the backward extrapolated range
 		if (sourceFedEx && currentPrice >= 3.28 && currentPrice < 3.55 && debugCount < 5) {
@@ -86,7 +112,7 @@ function normalizeToStepWidth(data: RawBand[], stepWidth: number): RawBand[] {
 			debugCount++;
 		}
 		
-		normalizedBands.push({
+		const band: RawBand = {
 			at_least_usd: currentPrice,
 			but_less_than_usd: nextPrice,
 			ups_pct: sourceUPS?.ups_pct ?? null,
@@ -95,7 +121,21 @@ function normalizeToStepWidth(data: RawBand[], stepWidth: number): RawBand[] {
 			ups_extrapolated: sourceUPS?.ups_extrapolated ?? false,
 			fedex_extrapolated: sourceFedEx?.fedex_extrapolated ?? false,
 			dhl_extrapolated: sourceDHL?.dhl_extrapolated ?? false,
-		});
+		};
+		
+		// Handle additional curve columns
+		for (const colKey of additionalCurveColumns) {
+			const sourceBand = findOverlappingBand(data, currentPrice, nextPrice, colKey);
+			band[colKey] = sourceBand?.[colKey] ?? null;
+			
+			// Also preserve extrapolation flag if it exists
+			const extrapolatedKey = colKey.replace('_pct', '_extrapolated');
+			if (sourceBand && extrapolatedKey in sourceBand) {
+				band[extrapolatedKey] = sourceBand[extrapolatedKey];
+			}
+		}
+		
+		normalizedBands.push(band);
 		
 		currentPrice = nextPrice;
 	}
@@ -104,23 +144,23 @@ function normalizeToStepWidth(data: RawBand[], stepWidth: number): RawBand[] {
 }
 
 /**
- * Find source band that best matches the given price range for a specific carrier
+ * Find source band that best matches the given price range for a specific column
  * Returns the band that has the most coverage of the target range
  * Tiebreaker: if equal coverage, prefer the band that contains the target range START
+ * 
+ * @param columnKey - The column key to check (e.g., 'ups_pct', 'fedex_pct', 'fedex_24_pct')
  */
 function findOverlappingBand(
 	data: RawBand[],
 	rangeStart: number,
 	rangeEnd: number,
-	carrier: 'UPS' | 'FedEx' | 'DHL'
+	columnKey: string
 ): RawBand | null {
-	const carrierKey = `${carrier.toLowerCase()}_pct` as keyof RawBand;
-	
-	// Find all bands for this carrier that overlap with the target range
+	// Find all bands for this column that overlap with the target range
 	const candidates: { band: RawBand; coverage: number; containsStart: boolean }[] = [];
 	
 	for (const band of data) {
-		if (band[carrierKey] !== null) {
+		if (band[columnKey] !== null && band[columnKey] !== undefined) {
 			// Calculate overlap between [rangeStart, rangeEnd) and [band.at_least, band.but_less_than)
 			const overlapStart = Math.max(rangeStart, band.at_least_usd);
 			const overlapEnd = Math.min(rangeEnd, band.but_less_than_usd);

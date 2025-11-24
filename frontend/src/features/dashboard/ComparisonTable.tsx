@@ -6,6 +6,7 @@ import ComparisonChart from "./ComparisonChart";
 import * as Tabs from "@radix-ui/react-tabs";
 import { extrapolateBands, Band } from "@/utils/bandExtrapolation";
 import { applyViewTransformation, type ViewType, type RawBand } from "@/utils/viewTransformations";
+import type { SelectedCurve } from "@/components/filters/FuelCurveSelector";
 
 interface ComparisonRow {
 	price_range: string;
@@ -33,8 +34,10 @@ export default function ComparisonTable({
 	fuelCategory,
 	market,
 	carriers,
+	selectedCurves,
 	onCarriersWithDataChange,
 	onHasDataChange,
+	onAdditionalCurveRawData,
 }: {
 	view:
 		| "normalized"
@@ -46,18 +49,22 @@ export default function ComparisonTable({
 	fuelCategory?: string;
 	market?: string;
 	carriers?: string[];
+	selectedCurves?: SelectedCurve[];
 	onCarriersWithDataChange?: (carriers: string[]) => void;
 	onHasDataChange?: (hasData: boolean) => void;
+	onAdditionalCurveRawData?: (data: Map<number, any[]>) => void;
 }) {
 	const [rawData, setRawData] = useState<ComparisonRow[]>([]);
+	const [additionalCurveData, setAdditionalCurveData] = useState<Map<number, any[]>>(new Map());
 	const [loading, setLoading] = useState(true);
 	const [chartOrTable, setChartOrTable] = useState<"chart" | "table">("chart");
 	const [showExtrapolation, setShowExtrapolation] = useState(false);
-	
-	// Multi-curve mode is disabled
-	const isMultiCurveMode = false;
-	const multiCurveData: any[] = [];
-	const processedCurves: any[] = [];
+
+	// Identify which curves are "additional" (not active, need separate fetching)
+	const additionalCurves = useMemo(() => {
+		if (!selectedCurves) return [];
+		return selectedCurves.filter((c) => !c.isActive);
+	}, [selectedCurves]);
 
 	const loadRawData = useCallback(async () => {
 		if (!sessionId || !fuelCategory || !market) {
@@ -92,11 +99,135 @@ export default function ComparisonTable({
 		}
 	}, [sessionId, loadRawData]);
 
-	// STEP 1: Merge raw + extrapolated data
+	// Fetch additional (historical) curve data when selected
+	useEffect(() => {
+		const fetchAdditionalCurves = async () => {
+			if (additionalCurves.length === 0) {
+				setAdditionalCurveData(new Map());
+				return;
+			}
+
+			const newData = new Map<number, any[]>();
+			
+			for (const curve of additionalCurves) {
+				try {
+					// Use the multi-curve API to fetch just this one curve's data
+					const curveIds = curve.id.toString();
+					const response = await fetch(
+						`/api/comparison/compare?curve_version_ids=${curveIds}&view=raw`
+					);
+					if (response.ok) {
+						const data = await response.json();
+						// The response has curves array, each with rows
+						if (data.curves && data.curves.length > 0) {
+							newData.set(curve.id, data.curves[0].rows || []);
+							console.log(`📈 Loaded ${data.curves[0].rows?.length || 0} rows for curve ${curve.id} (${curve.label})`);
+						}
+					}
+				} catch (error) {
+					console.error(`Failed to load curve ${curve.id}:`, error);
+				}
+			}
+			
+			setAdditionalCurveData(newData);
+		};
+
+		fetchAdditionalCurves();
+	}, [additionalCurves]);
+
+	// STEP 1: Merge raw + additional curves + extrapolated data
 	const mergedData = useMemo(() => {
-		if (!showExtrapolation || rawData.length === 0 || !market || !fuelCategory) {
-			console.log('📊 Using raw data only (no extrapolation)');
-			return rawData.map(row => ({ ...row }));
+		// First, merge additional curve data into the raw data
+		let baseData = rawData.map(row => ({ ...row }));
+		
+		// Add additional curve data as new columns
+		if (additionalCurves.length > 0 && additionalCurveData.size > 0) {
+			console.log('📊 Merging additional curve data...');
+			console.log(`   Additional curves to merge:`, additionalCurves.map(c => `${c.carrier} (ID: ${c.id})`));
+			console.log(`   Additional curve data available for IDs:`, Array.from(additionalCurveData.keys()));
+			
+			for (const curve of additionalCurves) {
+				const curveRows = additionalCurveData.get(curve.id);
+				if (!curveRows || curveRows.length === 0) {
+					console.warn(`   ⚠️ No data found for curve ${curve.id} (${curve.carrier})`);
+					continue;
+				}
+				
+				const columnKey = `${curve.carrier.toLowerCase()}_${curve.id}_pct`;
+				console.log(`   ✅ Adding column ${columnKey} with ${curveRows.length} rows`);
+				console.log(`      Sample rows:`, curveRows.slice(0, 3).map((r: any) => 
+					`$${r.at_least_usd}-$${r.but_less_than_usd}: ${r.surcharge_pct}%`
+				));
+				
+				// Create a lookup map for the additional curve data
+				const curveLookup = new Map<string, number>();
+				for (const row of curveRows) {
+					const key = `${row.at_least_usd}-${row.but_less_than_usd}`;
+					curveLookup.set(key, row.surcharge_pct);
+				}
+				
+				// Add the column to existing rows where ranges match
+				let matchedCount = 0;
+				for (const row of baseData) {
+					const key = `${row.at_least_usd}-${row.but_less_than_usd}`;
+					const matchedValue = curveLookup.get(key);
+					(row as any)[columnKey] = matchedValue ?? null;
+					if (matchedValue !== undefined) matchedCount++;
+				}
+				console.log(`      Matched ${matchedCount} existing rows`);
+				
+				// Also add rows that only exist in the additional curve
+				let addedCount = 0;
+				for (const curveRow of curveRows) {
+					const exists = baseData.some(
+						(r) => r.at_least_usd === curveRow.at_least_usd && 
+						       r.but_less_than_usd === curveRow.but_less_than_usd
+					);
+					
+					if (!exists) {
+						const newRow: any = {
+							price_range: `$${curveRow.at_least_usd.toFixed(2)} - $${curveRow.but_less_than_usd.toFixed(2)}`,
+							at_least_usd: curveRow.at_least_usd,
+							but_less_than_usd: curveRow.but_less_than_usd,
+							ups_pct: null,
+							fedex_pct: null,
+							dhl_pct: null,
+							[columnKey]: curveRow.surcharge_pct,
+						};
+						baseData.push(newRow);
+						addedCount++;
+					}
+				}
+				console.log(`      Added ${addedCount} new rows for ranges unique to this curve`);
+			}
+			
+			// Sort by price after merging
+			baseData.sort((a, b) => a.at_least_usd - b.at_least_usd);
+			console.log(`   📊 Final merged data: ${baseData.length} rows`);
+			
+			// Debug: Show a few rows with the additional column
+			const sampleWithColumn = baseData.filter((r: any) => {
+				for (const curve of additionalCurves) {
+					const key = `${curve.carrier.toLowerCase()}_${curve.id}_pct`;
+					if (r[key] !== null && r[key] !== undefined) return true;
+				}
+				return false;
+			}).slice(0, 5);
+			console.log(`   Sample rows with additional curve data:`, sampleWithColumn.map((r: any) => {
+				const vals: string[] = [`$${r.at_least_usd}-$${r.but_less_than_usd}`];
+				for (const curve of additionalCurves) {
+					const key = `${curve.carrier.toLowerCase()}_${curve.id}_pct`;
+					if (r[key] !== null && r[key] !== undefined) {
+						vals.push(`${key}=${r[key]}%`);
+					}
+				}
+				return vals.join(' ');
+			}));
+		}
+		
+		if (!showExtrapolation || baseData.length === 0 || !market || !fuelCategory) {
+			console.log('📊 Using merged data (no extrapolation)');
+			return baseData;
 		}
 
 		console.log('🔮 Computing extrapolation for merged dataset...');
@@ -106,6 +237,7 @@ export default function ComparisonTable({
 		const availableCarriers = carriers || ["UPS", "FedEx", "DHL"];
 
 		for (const carrier of availableCarriers) {
+			// Use rawData for determining extrapolation base (only active curves)
 			const carrierBands = rawData.filter((r: any) => {
 				const carrierKey = carrier.toLowerCase() + '_pct';
 				return r[carrierKey] !== null && r[carrierKey] !== undefined;
@@ -118,7 +250,7 @@ export default function ComparisonTable({
 			}
 		}
 
-		// Compute extrapolated bands for each carrier
+		// Compute extrapolated bands for each carrier (only for active curves)
 		const extrapolatedMap = new Map<string, Band[]>();
 
 		for (const carrier of availableCarriers) {
@@ -143,18 +275,45 @@ export default function ComparisonTable({
 				if (extrapolated.length > 0) {
 					extrapolatedMap.set(carrier, extrapolated);
 					console.log(`   ${carrier}: ${extrapolated.length} extrapolated bands`);
-					console.log(`   ${carrier} first 5:`, extrapolated.slice(0, 5).map(b => 
-						`$${b.at_least_usd.toFixed(2)}-${b.but_less_than_usd.toFixed(2)}: ${b.surcharge_pct}%`
-					));
-					console.log(`   ${carrier} last 5:`, extrapolated.slice(-5).map(b => 
-						`$${b.at_least_usd.toFixed(2)}-${b.but_less_than_usd.toFixed(2)}: ${b.surcharge_pct}%`
-					));
+				}
+			}
+		}
+		
+		// Also extrapolate additional (historical) curves
+		for (const curve of additionalCurves) {
+			const curveRows = additionalCurveData.get(curve.id);
+			if (!curveRows || curveRows.length === 0) continue;
+			
+			const columnKey = `${curve.carrier.toLowerCase()}_${curve.id}_pct`;
+			const extrapolatedKey = `${curve.carrier}_${curve.id}`;
+			
+			const curveBands: Band[] = curveRows.map((r: any) => ({
+				at_least_usd: r.at_least_usd,
+				but_less_than_usd: r.but_less_than_usd,
+				surcharge_pct: r.surcharge_pct
+			}));
+			
+			if (curveBands.length > 0) {
+				const extrapolated = extrapolateBands(
+					curveBands,
+					curve.carrier,
+					market,
+					fuelCategory
+				);
+				if (extrapolated.length > 0) {
+					extrapolatedMap.set(extrapolatedKey, extrapolated);
+					console.log(`   ${curve.carrier} (historical ${curve.id}): ${extrapolated.length} extrapolated bands`);
+					
+					// Track real data range for this curve
+					const min = Math.min(...curveBands.map(b => b.at_least_usd));
+					const max = Math.max(...curveBands.map(b => b.but_less_than_usd));
+					realDataRanges.set(extrapolatedKey, { min, max });
 				}
 			}
 		}
 
-		// Start with all real data - use array instead of map to preserve all rows
-		const allBands: ComparisonRow[] = rawData.map(row => ({
+		// Start with the merged base data (includes additional curves)
+		const allBands: ComparisonRow[] = baseData.map(row => ({
 			...row,
 			ups_extrapolated: false,
 			fedex_extrapolated: false,
@@ -162,9 +321,26 @@ export default function ComparisonTable({
 		}));
 
 		// Add ONLY extrapolated bands that don't overlap with real data
-		for (const [carrier, bands] of extrapolatedMap) {
-			const realRange = realDataRanges.get(carrier);
+		for (const [carrierOrKey, bands] of extrapolatedMap) {
+			const realRange = realDataRanges.get(carrierOrKey);
 			if (!realRange) continue;
+			
+			// Determine if this is an additional curve (has underscore with number) or main carrier
+			const isAdditionalCurve = carrierOrKey.includes('_') && /\d/.test(carrierOrKey);
+			
+			let carrierKey: string;
+			let extrapolatedFlagKey: string;
+			
+			if (isAdditionalCurve) {
+				// Additional curve like "FedEx_24"
+				const [carrier, curveId] = carrierOrKey.split('_');
+				carrierKey = `${carrier.toLowerCase()}_${curveId}_pct`;
+				extrapolatedFlagKey = `${carrier.toLowerCase()}_${curveId}_extrapolated`;
+			} else {
+				// Main carrier
+				carrierKey = `${carrierOrKey.toLowerCase()}_pct`;
+				extrapolatedFlagKey = `${carrierOrKey.toLowerCase()}_extrapolated`;
+			}
 
 			bands.forEach(band => {
 				// Only add if this band is OUTSIDE the real data range
@@ -172,12 +348,9 @@ export default function ComparisonTable({
 				                       band.at_least_usd >= realRange.max;
 				
 				if (!isOutsideRange) {
-					console.warn(`⚠️ Skipping extrapolated band [${band.at_least_usd}-${band.but_less_than_usd}] for ${carrier} - overlaps with real data range [${realRange.min}-${realRange.max}]`);
+					console.warn(`⚠️ Skipping extrapolated band [${band.at_least_usd}-${band.but_less_than_usd}] for ${carrierOrKey} - overlaps with real data range [${realRange.min}-${realRange.max}]`);
 					return;
 				}
-
-				const carrierKey = `${carrier.toLowerCase()}_pct` as keyof ComparisonRow;
-				const extrapolatedKey = `${carrier.toLowerCase()}_extrapolated` as keyof ComparisonRow;
 
 				// Check if a row already exists at EXACTLY this price range (both start AND end must match)
 				const existingIndex = allBands.findIndex(b => 
@@ -188,7 +361,7 @@ export default function ComparisonTable({
 				if (existingIndex >= 0) {
 					// Update existing row (same price range, different carrier data)
 					(allBands[existingIndex] as any)[carrierKey] = band.surcharge_pct;
-					(allBands[existingIndex] as any)[extrapolatedKey] = true;
+					(allBands[existingIndex] as any)[extrapolatedFlagKey] = true;
 				} else {
 					// Create new row for this unique price range
 					const newRow: ComparisonRow = {
@@ -203,7 +376,7 @@ export default function ComparisonTable({
 						dhl_extrapolated: false,
 					};
 					(newRow as any)[carrierKey] = band.surcharge_pct;
-					(newRow as any)[extrapolatedKey] = true;
+					(newRow as any)[extrapolatedFlagKey] = true;
 					allBands.push(newRow);
 				}
 			});
@@ -218,7 +391,7 @@ export default function ComparisonTable({
 			return `$${b.at_least_usd.toFixed(2)}-${b.but_less_than_usd.toFixed(2)}: ${[ups, fedex, dhl].filter(Boolean).join(', ')}`;
 		}));
 		return merged;
-	}, [rawData, showExtrapolation, market, fuelCategory, carriers]);
+	}, [rawData, showExtrapolation, market, fuelCategory, carriers, additionalCurves, additionalCurveData]);
 
 	// STEP 2: Apply view transformation to merged data
 	const displayData = useMemo(() => {
@@ -339,6 +512,8 @@ export default function ComparisonTable({
 							fuelCategory={fuelCategory}
 							market={market}
 							showExtrapolation={showExtrapolation}
+							additionalCurves={additionalCurves}
+							additionalCurveRawData={additionalCurveData}
 						/>
 					) : (
 						<div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -376,6 +551,12 @@ export default function ComparisonTable({
 									{carriersWithData.includes("DHL") && (
 										<th className="text-center py-3 px-4 font-semibold">DHL</th>
 									)}
+									{/* Additional curve columns */}
+									{additionalCurves.map((curve) => (
+										<th key={curve.id} className="text-center py-3 px-4 font-semibold text-gray-600 dark:text-gray-400">
+											{curve.carrier} <span className="text-xs font-normal">({curve.label})</span>
+										</th>
+									))}
 								</tr>
 							</thead>
 							<tbody>
@@ -456,6 +637,23 @@ export default function ComparisonTable({
 													/>
 												</td>
 											)}
+											{/* Additional curve cells */}
+											{additionalCurves.map((curve) => {
+												const columnKey = `${curve.carrier.toLowerCase()}_${curve.id}_pct`;
+												const extrapolatedKey = `${curve.carrier.toLowerCase()}_${curve.id}_extrapolated`;
+												const value = (row as any)[columnKey];
+												const isExtrapolated = (row as any)[extrapolatedKey] || false;
+												return (
+													<td key={curve.id} className="py-3 px-4 text-center">
+														<SurchargeCell
+															value={value}
+															isLowest={false}
+															hasChanged={false}
+															isExtrapolated={isExtrapolated}
+														/>
+													</td>
+												);
+											})}
 										</tr>
 									);
 								})}
@@ -483,7 +681,7 @@ function SurchargeCell({
 	isLowest = false,
 	isExtrapolated = false,
 }: {
-	value: number | null;
+	value: number | null | undefined;
 	hasChanged?: boolean;
 	previousValue?: number;
 	currentTimestamp?: string;
@@ -491,7 +689,7 @@ function SurchargeCell({
 	isLowest?: boolean;
 	isExtrapolated?: boolean;
 }) {
-	if (value === null) {
+	if (value === null || value === undefined) {
 		return <span className="text-gray-400 dark:text-gray-600">-</span>;
 	}
 

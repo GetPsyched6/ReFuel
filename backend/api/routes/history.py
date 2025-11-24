@@ -53,7 +53,15 @@ async def get_all_sessions():
     
     import json
     for session in sessions:
-        session['carriers_scraped'] = json.loads(session['carriers_scraped'])
+        raw = session.get('carriers_scraped')
+        if raw:
+            try:
+                session['carriers_scraped'] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                # Handle non-JSON values (plain strings)
+                session['carriers_scraped'] = [raw] if raw else []
+        else:
+            session['carriers_scraped'] = []
     
     return sessions
 
@@ -216,7 +224,14 @@ async def get_sessions_in_range(
     
     import json
     for session in sessions:
-        session['carriers_scraped'] = json.loads(session['carriers_scraped'])
+        raw = session.get('carriers_scraped')
+        if raw:
+            try:
+                session['carriers_scraped'] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                session['carriers_scraped'] = [raw] if raw else []
+        else:
+            session['carriers_scraped'] = []
     
     return sessions
 
