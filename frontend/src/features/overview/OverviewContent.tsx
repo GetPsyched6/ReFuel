@@ -24,6 +24,7 @@ import { cn } from "@/utils/cn";
 import OutlierScatter from "./OutlierScatter";
 import CadenceHeatmap from "./CadenceHeatmap";
 import RelativeSurchargeIndex from "./RelativeSurchargeIndex";
+import FuelCurveVersionComparison from "./FuelCurveVersionComparison";
 import { getCarrierBrandColor } from "@/theme/carriers";
 
 interface OverviewContentProps {
@@ -592,6 +593,12 @@ export default function OverviewContent({
 			numCarriers={data.relative_index_data?.num_carriers || 0}
 			cheapestCarrier={data.relative_index_data?.cheapest_carrier}
 			message={data.relative_index_data?.message}
+		/>
+
+		{/* Fuel Curve Version Comparison - Shows only if carrier has multiple versions */}
+		<FuelCurveVersionComparison
+			market={selectedCountry}
+			fuelCategory={selectedServiceType}
 		/>
 	</div>
 	);

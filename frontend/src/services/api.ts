@@ -30,7 +30,8 @@ export const comparisonApi = {
 			| "normalized_fine"
 			| "overlap"
 			| "complete"
-			| "comparable" = "normalized",
+			| "comparable"
+			| "raw" = "normalized",
 		sessionId?: number,
 		includePrevious: boolean = false,
 		fuelCategory?: string,
@@ -57,7 +58,8 @@ export const comparisonApi = {
 			| "normalized_fine"
 			| "overlap"
 			| "complete"
-			| "comparable" = "normalized",
+			| "comparable"
+			| "raw" = "normalized",
 		curveVersionIds: number[],
 		fuelCategory?: string,
 		market?: string,
