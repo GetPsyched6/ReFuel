@@ -1,0 +1,86 @@
+[
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "3.55",
+    "but_less_than_usd": "3.64",
+    "surcharge": "20.00%",
+    "scraped_at": "2025-11-20T13:11:05.556744"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "3.64",
+    "but_less_than_usd": "3.73",
+    "surcharge": "20.25%",
+    "scraped_at": "2025-11-20T13:11:05.556812"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "3.73",
+    "but_less_than_usd": "3.82",
+    "surcharge": "20.50%",
+    "scraped_at": "2025-11-20T13:11:05.556849"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "3.82",
+    "but_less_than_usd": "3.91",
+    "surcharge": "20.75%",
+    "scraped_at": "2025-11-20T13:11:05.556869"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "3.91",
+    "but_less_than_usd": "4.00",
+    "surcharge": "21.00%",
+    "scraped_at": "2025-11-20T13:11:05.556885"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "4.00",
+    "but_less_than_usd": "4.09",
+    "surcharge": "21.25%",
+    "scraped_at": "2025-11-20T13:11:05.556899"
+  },
+  {
+    "carrier": "FedEx",
+    "service": "Ground",
+    "market": "US",
+    "currency": "USD",
+    "fuel_type": "Ground",
+    "fuel_category": "ground_domestic",
+    "at_least_usd": "4.09",
+    "but_less_than_usd": "4.18",
+    "surcharge": "21.50%",
+    "scraped_at": "2025-11-20T13:11:05.556912"
+  }
+]

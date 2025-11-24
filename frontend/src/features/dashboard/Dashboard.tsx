@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import Layout from "@/components/layout/Layout";
 import AITabbedView from "../insights/AITabbedView";
@@ -6,20 +6,25 @@ import ComparisonTable from "./ComparisonTable";
 import ScrapeNow from "../scraper/ScrapeNow";
 import HistoricalTrends from "../history/HistoricalTrends";
 import Chatbot from "../chatbot/Chatbot";
+import GlobalFilters from "@/components/filters/GlobalFilters";
+import DateRangeSelector from "@/components/filters/DateRangeSelector";
+import OverviewContent from "../overview/OverviewContent";
 import {
 	MessageCircle,
-	Calendar,
-	Table as TableIcon,
-	X,
-	Loader2,
 	Zap,
 	BarChart3,
+	TrendingUp,
+	Gauge,
+	Layers,
+	Users,
+	Grid,
+	Infinity as InfinityIcon,
+	Ruler,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { historyApi, comparisonApi } from "@/services/api";
+import { historyApi, metadataApi } from "@/services/api";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import * as Tabs from "@radix-ui/react-tabs";
-import { cn } from "@/utils/cn";
 
 interface Session {
 	id: number;
@@ -29,47 +34,87 @@ interface Session {
 	total_rows: number;
 }
 
-interface HistoricalRow {
-	id: number;
-	at_least_usd: number;
-	but_less_than_usd: number;
-	surcharge_pct: number;
-	service: string;
-}
+type ViewMode =
+	| "normalized"
+	| "normalized_fine"
+	| "overlap"
+	| "complete"
+	| "comparable";
 
-type HistoricalDetails = Record<string, HistoricalRow[]> | null;
+const DEFAULT_CARRIERS = ["UPS", "FedEx", "DHL"];
+const SERVICE_TYPE_ORDER = [
+	"ground_domestic",
+	"ground_regional",
+	"domestic_air",
+	"international_air_export",
+	"international_air_import",
+	"international_ground_export_import",
+];
 
-interface CarrierLastUpdate {
-	last_updated: string;
-	sessions_ago: number;
-}
-
-interface CarrierLastUpdates {
-	UPS: CarrierLastUpdate;
-	FedEx: CarrierLastUpdate;
-	DHL: CarrierLastUpdate;
-}
+type MarketAvailability = Record<
+	string,
+	{
+		carriers: string[];
+		services: string[];
+	}
+>;
 
 export default function Dashboard() {
 	const [showChatbot, setShowChatbot] = useState(false);
 	const [sessions, setSessions] = useState<Session[]>([]);
+
+	// Global filter state
+	const [selectedCountry, setSelectedCountry] = useState("US");
+	const [selectedCarriers, setSelectedCarriers] = useState<string[]>([
+		"UPS",
+		"FedEx",
+		"DHL",
+	]);
+	const [selectedServiceType, setSelectedServiceType] =
+		useState("ground_domestic");
+	const [filterAvailability, setFilterAvailability] =
+		useState<MarketAvailability>({});
+	const [filtersLoaded, setFiltersLoaded] = useState(false);
+
+	// Session and view state
 	const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
 		null
 	);
-	const [activeView, setActiveView] = useState<
-		"normalized" | "overlap" | "complete" | "comparable"
-	>("overlap");
-	const [primaryTab, setPrimaryTab] = useState("ai");
-	const [showHistoricalModal, setShowHistoricalModal] = useState(false);
-	const [historicalDetails, setHistoricalDetails] =
-		useState<HistoricalDetails>(null);
-	const [modalLoading, setModalLoading] = useState(false);
-	const [modalError, setModalError] = useState<string | null>(null);
-	const [carrierLastUpdates, setCarrierLastUpdates] =
-		useState<CarrierLastUpdates | null>(null);
+	const [activeView, setActiveView] = useState<ViewMode>("overlap");
+
+	// Tab state
+	const [primaryTab, setPrimaryTab] = useState("charts");
+	const [chartsSubTab, setChartsSubTab] = useState("fuel-curves");
+
+	// Date range state for historical tab
+	const [startDate, setStartDate] = useState<string | null>(null);
+	const [endDate, setEndDate] = useState<string | null>(null);
+
+	// Track carriers with data for conditional rendering
+	const [carriersWithData, setCarriersWithData] = useState<string[]>([]);
+	const [comparisonHasData, setComparisonHasData] = useState(true);
+	const [userCarriersOverride, setUserCarriersOverride] = useState(false);
+	const prevCountryRef = useRef<string | null>(null);
+
+
+	// Switch away from comparable view if only one carrier has data
+	useEffect(() => {
+		if (activeView === "comparable" && carriersWithData.length < 2) {
+			setActiveView("overlap");
+		}
+	}, [carriersWithData.length, activeView]);
+
+	useEffect(() => {
+		if (activeView === "overlap" && !comparisonHasData) {
+			setActiveView("normalized");
+		}
+	}, [activeView, comparisonHasData]);
 
 	useEffect(() => {
 		loadSessions();
+	}, []);
+	useEffect(() => {
+		loadFilterAvailability();
 	}, []);
 
 	const loadSessions = async () => {
@@ -78,20 +123,22 @@ export default function Dashboard() {
 			setSessions(response.data);
 			if (response.data.length > 0) {
 				setSelectedSessionId(response.data[0].id);
+				// Don't initialize dates - "All" should be selected by default (null dates)
 			}
 		} catch (error) {
 			console.error("Failed to load sessions:", error);
 		}
 	};
-
-	const loadCarrierLastUpdates = async () => {
+	const loadFilterAvailability = async () => {
 		try {
-			const response = await comparisonApi.getCarrierLastUpdates(
-				currentSessionId || undefined
-			);
-			setCarrierLastUpdates(response.data);
+			const response = await metadataApi.getFilterOptions();
+			const markets: MarketAvailability = response.data?.markets ?? {};
+			setFilterAvailability(markets);
 		} catch (error) {
-			console.error("Failed to load carrier last updates:", error);
+			console.error("Failed to load filter availability:", error);
+			setFilterAvailability({});
+		} finally {
+			setFiltersLoaded(true);
 		}
 	};
 
@@ -117,135 +164,207 @@ export default function Dashboard() {
 		() => selectedSessionId || sessions[0]?.id || null,
 		[selectedSessionId, sessions]
 	);
-	const currentSession = useMemo(
-		() => sessions.find((s) => s.id === currentSessionId),
-		[sessions, currentSessionId]
-	);
+
+	const handleDateRangeChange = (start: string | null, end: string | null) => {
+		setStartDate(start);
+		setEndDate(end);
+	};
+
+	const handleCarriersChange = (carriers: string[]) => {
+		setSelectedCarriers(carriers);
+		setUserCarriersOverride(true);
+	};
 
 	useEffect(() => {
-		if (currentSessionId) {
-			loadCarrierLastUpdates();
+		if (!filtersLoaded) return;
+		if (Object.keys(filterAvailability).length === 0) return;
+		if (!filterAvailability[selectedCountry]) {
+			const [firstMarket] = Object.keys(filterAvailability);
+			if (firstMarket) {
+				setSelectedCountry(firstMarket);
+			}
 		}
-	}, [currentSessionId]);
+	}, [filterAvailability, filtersLoaded, selectedCountry]);
 
-	const openHistoricalModal = async () => {
-		if (!currentSessionId) return;
-		setShowHistoricalModal(true);
-		setModalLoading(true);
-		setModalError(null);
-		try {
-			const response = await historyApi.getSessionDetails(currentSessionId);
-			setHistoricalDetails(response.data);
-		} catch (error) {
-			console.error("Failed to load session details:", error);
-			setModalError("Unable to load session details");
-		} finally {
-			setModalLoading(false);
+	useEffect(() => {
+		if (!filtersLoaded) return;
+		const availability = filterAvailability[selectedCountry];
+		const carriersForMarket =
+			availability && availability.carriers.length > 0
+				? availability.carriers
+				: DEFAULT_CARRIERS;
+
+		const countryChanged = prevCountryRef.current !== selectedCountry;
+		if (countryChanged) {
+			prevCountryRef.current = selectedCountry;
+			setSelectedCarriers(carriersForMarket);
+			setUserCarriersOverride(false);
+			return;
 		}
-	};
 
-	const closeHistoricalModal = () => {
-		setShowHistoricalModal(false);
-	};
+		if (!userCarriersOverride) {
+			setSelectedCarriers(carriersForMarket);
+		}
+	}, [
+		selectedCountry,
+		filterAvailability,
+		filtersLoaded,
+		userCarriersOverride,
+	]);
 
-	const renderHistoricalCard = () => {
-		if (sessions.length <= 1) return null;
+	useEffect(() => {
+		if (!filtersLoaded) return;
+		const availability = filterAvailability[selectedCountry];
+		if (!availability) return;
 
-		// Check if current session has different data from previous (not just row count)
-		// Always show notification when viewing live data with historical sessions available
-		const hasDataChanged = sessions.length >= 2 && !isHistorical;
-
-		return (
-			<motion.div
-				initial={{ opacity: 0, y: -10 }}
-				animate={{ opacity: 1, y: 0 }}
-				className="backdrop-blur-xl bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/50 p-4 rounded-2xl shadow-2xl"
-			>
-				<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-					<div className="flex items-center gap-3">
-						<div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20">
-							<Calendar className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-						</div>
-						<div>
-							<div className="flex items-center gap-2">
-								<h3 className="text-base font-semibold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-									View Historical Data
-								</h3>
-								{hasDataChanged && (
-									<span className="px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full shadow-lg">
-										DATA UPDATED
-									</span>
-								)}
-							</div>
-							<p className="text-xs text-gray-600 dark:text-gray-400">
-								{hasDataChanged && carrierLastUpdates ? (
-									<span>
-										{["UPS", "FedEx", "DHL"].map((carrier, idx) => {
-											const update =
-												carrierLastUpdates[carrier as keyof CarrierLastUpdates];
-											const date = new Date(
-												update.last_updated.includes("Z")
-													? update.last_updated
-													: update.last_updated + "Z"
-											);
-											const dateStr = date.toLocaleDateString("en-US", {
-												month: "short",
-												day: "numeric",
-											});
-											return (
-												<span key={carrier}>
-													<strong>{carrier}</strong> last updated {dateStr}
-													{idx < 2 ? " | " : ""}
-												</span>
-											);
-										})}
-									</span>
-								) : (
-									"Review past sessions"
-								)}
-							</p>
-						</div>
-					</div>
-					<div className="flex gap-2 w-full md:w-auto">
-						<CustomSelect
-							options={sessions.map((session) => ({
-								value: session.id,
-								label: `${formatDate(
-									session.timestamp
-								)} - ${session.carriers_scraped.join(", ")} (${
-									session.total_rows
-								} rows)`,
-							}))}
-							value={currentSessionId || sessions[0].id}
-							onChange={(value) => setSelectedSessionId(Number(value))}
-							placeholder="Select a data snapshot"
-						/>
-						<Button
-							variant="secondary"
-							className="flex items-center gap-2 px-3 whitespace-nowrap"
-							onClick={openHistoricalModal}
-						>
-							<TableIcon className="w-4 h-4" />
-							<span className="hidden sm:inline">View Raw Tables</span>
-							<span className="sm:hidden">Tables</span>
-						</Button>
-					</div>
-				</div>
-			</motion.div>
+		const validServices = availability.services.filter(
+			(service) => service && service !== "all"
 		);
-	};
+		if (!validServices.length) {
+			setSelectedServiceType("ground_domestic");
+			return;
+		}
+
+		if (!validServices.includes(selectedServiceType)) {
+			setSelectedServiceType(validServices[0]);
+		}
+	}, [selectedCountry, filterAvailability, filtersLoaded, selectedServiceType]);
+
+	const availableCarriers =
+		filterAvailability[selectedCountry]?.carriers ?? DEFAULT_CARRIERS;
+
+	const availableServicesRaw =
+		filterAvailability[selectedCountry]?.services ?? SERVICE_TYPE_ORDER;
+
+	const sanitizedAvailableServices = availableServicesRaw.filter(
+		(service) => service && service !== "all"
+	);
+
+	const availableServicesUnsorted = [
+		...new Set(
+			sanitizedAvailableServices.length
+				? sanitizedAvailableServices
+				: ["ground_domestic"]
+		),
+	];
+
+	const availableServices = availableServicesUnsorted.sort((a, b) => {
+		const rank = (value: string) => {
+			const index = SERVICE_TYPE_ORDER.indexOf(value);
+			return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+		};
+		return rank(a) - rank(b);
+	});
+
+	const usesEuro = useMemo(() => {
+		const normalizedMarket = selectedCountry?.toUpperCase();
+		return (
+			normalizedMarket === "DE" &&
+			(selectedServiceType === "ground_domestic" ||
+				selectedServiceType === "ground_regional" ||
+				selectedServiceType === "international_ground_export_import")
+		);
+	}, [selectedCountry, selectedServiceType]);
+
+	const normalizedCurrencySymbol = usesEuro ? "€" : "$";
+
+	const viewOptions = useMemo(() => {
+		const baseOptions = [
+			{
+				value: "overlap",
+				label: "Overlap View",
+				description: "Direct comparison",
+				icon: <Layers className="w-4 h-4" />,
+			},
+			{
+				value: "comparable",
+				label: "Comparable Ranges",
+				description: "Grouped overlaps - 2+ carriers",
+				icon: <Users className="w-4 h-4" />,
+			},
+			{
+				value: "normalized",
+				label: "Normalized Grid",
+				description: `${normalizedCurrencySymbol}0.10 intervals`,
+				icon: <Grid className="w-4 h-4" />,
+			},
+			{
+				value: "normalized_fine",
+				label: "Precision Grid",
+				description: `${normalizedCurrencySymbol}0.02 steps`,
+				icon: <Ruler className="w-4 h-4" />,
+			},
+			{
+				value: "complete",
+				label: "Complete View",
+				description: "All data points",
+				icon: <InfinityIcon className="w-4 h-4" />,
+			},
+		];
+
+		return carriersWithData.length >= 2
+			? baseOptions
+			: baseOptions.filter((option) => option.value !== "comparable");
+	}, [carriersWithData.length, normalizedCurrencySymbol]);
 
 	return (
 		<Layout lastUpdate={latestSession?.timestamp} isHistorical={isHistorical}>
 			<div className="space-y-6">
-				{renderHistoricalCard()}
+				{/* Global Filters */}
+				<GlobalFilters
+					selectedCountry={selectedCountry}
+					selectedCarriers={selectedCarriers}
+					selectedServiceType={selectedServiceType}
+					onCountryChange={(country) => {
+						setSelectedCountry(country);
+						setUserCarriersOverride(false);
+					}}
+					onCarriersChange={handleCarriersChange}
+					onServiceTypeChange={setSelectedServiceType}
+					availableCarriers={availableCarriers}
+					availableServiceTypes={availableServices}
+					sessionId={currentSessionId || undefined}
+				/>
 
+				{/* Main Tabs */}
 				<Tabs.Root
 					value={primaryTab}
 					onValueChange={setPrimaryTab}
 					className="space-y-6"
 				>
-					<Tabs.List className="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<Tabs.List className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<Tabs.Trigger value="overview" asChild>
+							<motion.button
+								whileHover={{ scale: 1.02, y: -2 }}
+								whileTap={{ scale: 0.98 }}
+								className="p-5 rounded-2xl backdrop-blur-xl bg-gray-200/40 dark:bg-gray-900/30 border border-gray-300/40 dark:border-gray-700/50 hover:shadow-2xl hover:border-green-400/30 dark:hover:border-green-500/30 transition-all duration-200 data-[state=active]:bg-gradient-to-br data-[state=active]:from-green-500 data-[state=active]:to-green-700 data-[state=active]:text-white data-[state=active]:shadow-2xl data-[state=active]:ring-2 data-[state=active]:ring-green-400/50 text-left"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<Gauge className="w-5 h-5" />
+									<h2 className="text-lg font-semibold">Overview</h2>
+								</div>
+								<p className="text-sm opacity-80">
+									Dashboard summary and key metrics
+								</p>
+							</motion.button>
+						</Tabs.Trigger>
+
+						<Tabs.Trigger value="charts" asChild>
+							<motion.button
+								whileHover={{ scale: 1.02, y: -2 }}
+								whileTap={{ scale: 0.98 }}
+								className="p-5 rounded-2xl backdrop-blur-xl bg-gray-200/40 dark:bg-gray-900/30 border border-gray-300/40 dark:border-gray-700/50 hover:shadow-2xl hover:border-amber-400/30 dark:hover:border-amber-500/30 transition-all duration-200 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-600 data-[state=active]:to-amber-800 data-[state=active]:text-white data-[state=active]:shadow-2xl data-[state=active]:ring-2 data-[state=active]:ring-amber-500/50 text-left"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<BarChart3 className="w-5 h-5" />
+									<h2 className="text-lg font-semibold">Charts & Tables</h2>
+								</div>
+								<p className="text-sm opacity-80">
+									Comparison views, historical trends, and raw data tables
+								</p>
+							</motion.button>
+						</Tabs.Trigger>
+
 						<Tabs.Trigger value="ai" asChild>
 							<motion.button
 								whileHover={{ scale: 1.02, y: -2 }}
@@ -263,71 +382,120 @@ export default function Dashboard() {
 								</p>
 							</motion.button>
 						</Tabs.Trigger>
-						<Tabs.Trigger value="charts" asChild>
-							<motion.button
-								whileHover={{ scale: 1.02, y: -2 }}
-								whileTap={{ scale: 0.98 }}
-								className="p-5 rounded-2xl backdrop-blur-xl bg-gray-200/40 dark:bg-gray-900/30 border border-gray-300/40 dark:border-gray-700/50 hover:shadow-2xl hover:border-amber-400/30 dark:hover:border-amber-500/30 transition-all duration-200 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-600 data-[state=active]:to-amber-800 data-[state=active]:text-white data-[state=active]:shadow-2xl data-[state=active]:ring-2 data-[state=active]:ring-amber-500/50 text-left"
-							>
-								<div className="flex items-center gap-2 mb-2">
-									<BarChart3 className="w-5 h-5" />
-									<h2 className="text-lg font-semibold">Charts & Tables</h2>
-								</div>
-								<p className="text-sm opacity-80">
-									Comparison views, historical trends, and raw data tables
-								</p>
-							</motion.button>
-						</Tabs.Trigger>
 					</Tabs.List>
 
+					{/* Overview Tab */}
 					<Tabs.Content
-						value="ai"
+						value="overview"
 						className="space-y-6"
 						forceMount
-						hidden={primaryTab !== "ai"}
+						hidden={primaryTab !== "overview"}
 					>
-						<AITabbedView sessionId={currentSessionId || undefined} />
+						<OverviewContent
+							selectedCountry={selectedCountry}
+							selectedServiceType={selectedServiceType}
+						/>
 					</Tabs.Content>
 
+					{/* Charts & Tables Tab with Sub-tabs */}
 					<Tabs.Content
 						value="charts"
 						className="space-y-6"
 						forceMount
 						hidden={primaryTab !== "charts"}
 					>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-							<ViewCard
-								title="Overlap View"
-								description="Direct comparison - real data only"
-								active={activeView === "overlap"}
-								onClick={() => setActiveView("overlap")}
-							/>
-							<ViewCard
-								title="Comparable Ranges"
-								description="Grouped overlaps - 2+ carriers"
-								active={activeView === "comparable"}
-								onClick={() => setActiveView("comparable")}
-							/>
-							<ViewCard
-								title="Normalized Grid"
-								description="$0.25 intervals - actual data only"
-								active={activeView === "normalized"}
-								onClick={() => setActiveView("normalized")}
-							/>
-							<ViewCard
-								title="Complete View"
-								description="All data points from all carriers"
-								active={activeView === "complete"}
-								onClick={() => setActiveView("complete")}
-							/>
-						</div>
+						<Tabs.Root
+							value={chartsSubTab}
+							onValueChange={setChartsSubTab}
+							className="space-y-6"
+						>
+							<Tabs.List className="flex gap-2 p-1 rounded-xl backdrop-blur-xl bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/50">
+								<Tabs.Trigger
+									value="fuel-curves"
+									className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=inactive]:text-gray-700 dark:data-[state=inactive]:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-700/50"
+								>
+									<Gauge className="w-4 h-4" />
+									Fuel Curves
+								</Tabs.Trigger>
+								<Tabs.Trigger
+									value="historical"
+									className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=inactive]:text-gray-700 dark:data-[state=inactive]:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-700/50"
+								>
+									<TrendingUp className="w-4 h-4" />
+									Historical Fuel Surcharge
+								</Tabs.Trigger>
+							</Tabs.List>
 
-						<ComparisonTable
-							view={activeView}
+							{/* Fuel Curves Sub-tab */}
+							<Tabs.Content value="fuel-curves" className="space-y-6">
+								{/* Compact control row */}
+								{sessions.length > 0 && (
+									<motion.div
+										initial={{ opacity: 0, y: -10 }}
+										animate={{ opacity: 1, y: 0 }}
+										className="backdrop-blur-xl bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/40 p-4 rounded-2xl shadow-2xl"
+									>
+										<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+											<div className="flex-1 min-w-[260px]">
+												<div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+													<Layers className="w-4 h-4 text-amber-500" />
+													View Mode
+												</div>
+												<CustomSelect
+													options={viewOptions}
+													value={activeView}
+													onChange={(value) => setActiveView(value as ViewMode)}
+													placeholder="Select view"
+												/>
+											</div>
+										</div>
+									</motion.div>
+								)}
+
+								{/* Comparison Table */}
+								<ComparisonTable
+									view={activeView}
+									sessionId={currentSessionId || undefined}
+									fuelCategory={selectedServiceType}
+									market={selectedCountry}
+									carriers={selectedCarriers}
+									onCarriersWithDataChange={setCarriersWithData}
+									onHasDataChange={setComparisonHasData}
+								/>
+							</Tabs.Content>
+
+							{/* Historical Sub-tab */}
+							<Tabs.Content value="historical" className="space-y-6">
+								<DateRangeSelector
+									startDate={startDate}
+									endDate={endDate}
+									onDateRangeChange={handleDateRangeChange}
+								/>
+
+								<HistoricalTrends
+									carriers={selectedCarriers}
+									fuelCategory={selectedServiceType}
+									market={selectedCountry}
+									startDate={startDate}
+									endDate={endDate}
+								/>
+							</Tabs.Content>
+						</Tabs.Root>
+					</Tabs.Content>
+
+					{/* AI Tab */}
+					<Tabs.Content
+						value="ai"
+						className="space-y-6"
+						forceMount
+						hidden={primaryTab !== "ai"}
+					>
+						<AITabbedView
 							sessionId={currentSessionId || undefined}
+							fuelCategory={selectedServiceType}
+							market={selectedCountry}
+							carriers={selectedCarriers}
 						/>
-
-						<HistoricalTrends />
 					</Tabs.Content>
 				</Tabs.Root>
 
@@ -351,183 +519,7 @@ export default function Dashboard() {
 				<AnimatePresence>
 					{showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
 				</AnimatePresence>
-
-				<AnimatePresence>
-					{showHistoricalModal && (
-						<motion.div
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							exit={{ opacity: 0 }}
-							className="fixed inset-0 z-50 flex items-center justify-center"
-						>
-							<div
-								className="absolute inset-0 bg-black/60"
-								onClick={closeHistoricalModal}
-							></div>
-							<motion.div
-								initial={{ scale: 0.95, opacity: 0 }}
-								animate={{ scale: 1, opacity: 1 }}
-								exit={{ scale: 0.95, opacity: 0 }}
-								className="relative z-50 max-w-6xl w-full mx-4 rounded-3xl overflow-hidden backdrop-blur-xl bg-white/90 dark:bg-gray-900/90 border border-white/20 dark:border-gray-700/40 shadow-3xl"
-							>
-								<div className="flex items-start justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-									<div>
-										<h3 className="text-xl font-semibold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
-											Session Details
-										</h3>
-										<p className="text-sm text-gray-600 dark:text-gray-400">
-											{currentSession
-												? formatDate(currentSession.timestamp)
-												: ""}
-										</p>
-									</div>
-									<button
-										onClick={closeHistoricalModal}
-										className="p-2 rounded-full hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
-										aria-label="Close session details"
-									>
-										<X className="w-5 h-5" />
-									</button>
-								</div>
-								<div className="p-6">
-									{modalLoading ? (
-										<div className="flex items-center justify-center py-12 text-gray-500 dark:text-gray-400 gap-2">
-											<Loader2 className="w-5 h-5 animate-spin" />
-											<span>Loading session details...</span>
-										</div>
-									) : modalError ? (
-										<div className="text-center py-12 text-red-500 dark:text-red-300">
-											{modalError}
-										</div>
-									) : historicalDetails ? (
-										<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-											{["UPS", "FedEx", "DHL"].map((carrier) => (
-												<div
-													key={carrier}
-													className="backdrop-blur-xl bg-white/60 dark:bg-gray-800/40 border border-white/40 dark:border-gray-700/40 rounded-2xl shadow-lg overflow-hidden"
-												>
-													<div
-														className={cn(
-															"px-4 py-3 text-sm font-semibold",
-															carrier === "UPS"
-																? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
-																: carrier === "DHL"
-																? "bg-gradient-to-r from-blue-500 to-sky-500 text-white"
-																: "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
-														)}
-													>
-														{carrier} Data
-													</div>
-													<div className="max-h-[420px] overflow-y-auto">
-														<table className="w-full text-sm">
-															<thead className="sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-																<tr>
-																	<th className="text-left py-2 px-3">
-																		Service
-																	</th>
-																	<th className="text-left py-2 px-3">
-																		Price Range
-																	</th>
-																	<th className="text-right py-2 px-3">
-																		Surcharge %
-																	</th>
-																</tr>
-															</thead>
-															<tbody>
-																{(historicalDetails[carrier] || []).map(
-																	(row) => (
-																		<tr
-																			key={row.id}
-																			className="border-b border-gray-100 dark:border-gray-800"
-																		>
-																			<td className="py-2 px-3 text-gray-600 dark:text-gray-300">
-																				{row.service}
-																			</td>
-																			<td className="py-2 px-3 text-gray-700 dark:text-gray-200">
-																				{`${row.at_least_usd.toFixed(
-																					2
-																				)} - ${row.but_less_than_usd.toFixed(
-																					2
-																				)}`}
-																			</td>
-																			<td className="py-2 px-3 text-right font-semibold text-gray-900 dark:text-gray-100">
-																				{row.surcharge_pct.toFixed(2)}%
-																			</td>
-																		</tr>
-																	)
-																)}
-																{(historicalDetails[carrier] || []).length ===
-																	0 && (
-																	<tr>
-																		<td
-																			colSpan={3}
-																			className="py-6 text-center text-gray-500 dark:text-gray-400"
-																		>
-																			No data for this carrier
-																		</td>
-																	</tr>
-																)}
-															</tbody>
-														</table>
-													</div>
-												</div>
-											))}
-										</div>
-									) : (
-										<div className="text-center py-12 text-gray-500 dark:text-gray-400">
-											No data available
-										</div>
-									)}
-								</div>
-							</motion.div>
-						</motion.div>
-					)}
-				</AnimatePresence>
 			</div>
 		</Layout>
-	);
-}
-
-function ViewCard({
-	title,
-	description,
-	active,
-	onClick,
-}: {
-	title: string;
-	description: string;
-	active: boolean;
-	onClick: () => void;
-}) {
-	return (
-		<motion.div
-			whileHover={{ scale: 1.02, y: -2 }}
-			whileTap={{ scale: 0.98 }}
-			onClick={onClick}
-			transition={{ duration: 0.2, ease: "easeOut" }}
-			className={cn(
-				"p-4 rounded-xl cursor-pointer transition-all duration-200",
-				active
-					? "bg-gradient-to-br from-amber-600 to-amber-800 text-white shadow-2xl ring-2 ring-amber-500/50"
-					: "bg-white/70 dark:bg-gray-900/30 border-2 border-gray-300 dark:border-gray-700/50 hover:shadow-2xl hover:border-amber-500/30 hover:bg-white/90 dark:hover:bg-gray-800/40"
-			)}
-		>
-			<h3
-				className={cn(
-					"font-semibold mb-1",
-					active ? "text-white" : "text-gray-900 dark:text-white"
-				)}
-			>
-				{title}
-			</h3>
-			<p
-				className={cn(
-					"text-sm",
-					active ? "text-white/90" : "text-gray-700 dark:text-gray-400"
-				)}
-			>
-				{description}
-			</p>
-		</motion.div>
 	);
 }

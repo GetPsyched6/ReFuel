@@ -57,11 +57,14 @@ async def health():
 
 
 # Import and include routers
-from api.routes import scraper, comparison, history, ai
+from api.routes import scraper, comparison, history, ai, metadata, overview, fuel_curves
 app.include_router(scraper.router, prefix=f"{settings.API_PREFIX}/scraper", tags=["scraper"])
 app.include_router(comparison.router, prefix=f"{settings.API_PREFIX}/comparison", tags=["comparison"])
 app.include_router(history.router, prefix=f"{settings.API_PREFIX}/history", tags=["history"])
 app.include_router(ai.router, prefix=f"{settings.API_PREFIX}/ai", tags=["ai"])
+app.include_router(metadata.router, prefix=f"{settings.API_PREFIX}/metadata", tags=["metadata"])
+app.include_router(overview.router, prefix=f"{settings.API_PREFIX}/overview", tags=["overview"])
+app.include_router(fuel_curves.router, prefix=f"{settings.API_PREFIX}/fuel-curves", tags=["fuel-curves"])
 
 
 if __name__ == "__main__":

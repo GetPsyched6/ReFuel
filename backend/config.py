@@ -59,5 +59,49 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+# Inflection detection skip list for converted data
+# Format: (market, carrier, fuel_category)
+INFLECTION_SKIP_LIST = {
+    ("DE", "DHL", "ground_domestic"),  # Converted from EUR/L to USD/gal
+    # Add more as needed
+}
+
+# UPS Explicit Fuel Surcharge Formulas
+# These are used when fuel prices fall outside the published range
+UPS_FORMULAS = {
+    # UPS US Ground Domestic - Already implemented in comparison_service.py
+    ("US", "UPS", "ground_domestic"): {
+        "above_threshold": 3.70,
+        "above_increment": 0.10,
+        "above_pct_increment": 0.50,
+        "below_threshold": 3.70,
+        "below_increment": 0.10,
+        "below_pct_increment": 0.50,
+    },
+    
+    # UPS US Domestic Air
+    ("US", "UPS", "domestic_air"): {
+        "pivot_threshold": 2.06,
+        "above_threshold": 2.06,
+        "above_increment": 0.05,  # $0.05 increments above $2.06
+        "above_pct_increment": 0.25,  # 0.25% increments
+        "below_threshold": 2.06,
+        "below_increment": 0.21,  # $0.21 increments below $2.06
+        "below_pct_increment": 0.25,  # 0.25% increments
+    },
+    
+    # UPS US International Air Export
+    ("US", "UPS", "international_air_export"): {
+        "increment": 0.04,  # $0.04 increments
+        "pct_increment": 0.25,  # 0.25% increments
+    },
+    
+    # UPS US International Air Import
+    ("US", "UPS", "international_air_import"): {
+        "increment": 0.04,  # $0.04 increments
+        "pct_increment": 0.25,  # 0.25% increments
+    },
+}
+
 settings = Settings()
 

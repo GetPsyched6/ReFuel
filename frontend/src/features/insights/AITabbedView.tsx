@@ -35,9 +35,17 @@ interface ExecutiveAnalysisResponse {
 
 interface AITabbedViewProps {
 	sessionId?: number;
+	fuelCategory?: string;
+	market?: string;
+	carriers?: string[];
 }
 
-const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
+const AITabbedView: React.FC<AITabbedViewProps> = ({
+	sessionId,
+	fuelCategory,
+	market,
+	carriers,
+}) => {
 	const [quickInsights, setQuickInsights] = useState<any>(null);
 	const [executiveAnalysis, setExecutiveAnalysis] =
 		useState<ExecutiveAnalysisResponse | null>(null);
@@ -177,6 +185,25 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 		},
 	];
 
+	// Get filter context for display
+	const getFilterSummary = () => {
+		const parts: string[] = [];
+		if (market && market !== "US") parts.push(`Market: ${market}`);
+		if (fuelCategory && fuelCategory !== "all") {
+			const categoryLabel = fuelCategory
+				.split("_")
+				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+				.join(" ");
+			parts.push(`Service: ${categoryLabel}`);
+		}
+		if (carriers && carriers.length > 0 && carriers.length < 3) {
+			parts.push(`Carriers: ${carriers.join(", ")}`);
+		}
+		return parts.length > 0 ? parts.join(" • ") : null;
+	};
+
+	const filterSummary = getFilterSummary();
+
 	return (
 		<Card glass className="p-6">
 			<div className="mb-6">
@@ -185,6 +212,11 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({ sessionId }) => {
 				</h2>
 				<p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
 					AI-powered insights and recommendations
+					{filterSummary && (
+						<span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">
+							{filterSummary}
+						</span>
+					)}
 				</p>
 			</div>
 

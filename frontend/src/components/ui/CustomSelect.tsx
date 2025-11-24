@@ -1,3 +1,4 @@
+import { ReactNode, useMemo } from "react";
 import * as Select from "@radix-ui/react-select";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/utils/cn";
@@ -5,6 +6,8 @@ import { cn } from "@/utils/cn";
 interface SelectOption {
 	value: string | number;
 	label: string;
+	description?: string;
+	icon?: ReactNode;
 }
 
 interface CustomSelectProps {
@@ -22,6 +25,11 @@ export function CustomSelect({
 	placeholder = "Select an option",
 	className,
 }: CustomSelectProps) {
+	const selectedOption = useMemo(
+		() => options.find((opt) => String(opt.value) === String(value)),
+		[options, value]
+	);
+
 	return (
 		<Select.Root
 			value={String(value)}
@@ -35,7 +43,7 @@ export function CustomSelect({
 		>
 			<Select.Trigger
 				className={cn(
-					"w-full px-4 py-3 rounded-xl",
+					"w-full px-4 py-2.5 rounded-xl",
 					"backdrop-blur-xl bg-white/80 dark:bg-gray-800/80",
 					"border-2 border-gray-200 dark:border-gray-700",
 					"hover:border-blue-400 dark:hover:border-blue-500",
@@ -49,7 +57,24 @@ export function CustomSelect({
 					className
 				)}
 			>
-				<Select.Value placeholder={placeholder} className="font-medium" />
+				<div className="flex items-center gap-3 w-full">
+					{selectedOption?.icon && (
+						<span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100/80 dark:bg-gray-700/60 text-gray-700 dark:text-gray-100 flex-shrink-0">
+							{selectedOption.icon}
+						</span>
+					)}
+					<div className="flex flex-col min-w-0">
+						<span className="font-semibold text-sm leading-tight truncate">
+							{selectedOption?.label || placeholder}
+						</span>
+						{selectedOption?.description && (
+							<span className="text-xs text-gray-600 dark:text-gray-400 leading-tight truncate">
+								{selectedOption.description}
+							</span>
+						)}
+					</div>
+				</div>
+
 				<Select.Icon>
 					<ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />
 				</Select.Icon>
@@ -73,8 +98,8 @@ export function CustomSelect({
 								key={option.value}
 								value={String(option.value)}
 								className={cn(
-									"relative flex items-center gap-3",
-									"px-4 py-3 rounded-lg",
+									"group relative flex items-center gap-3",
+									"px-4 py-2.5 rounded-lg",
 									"text-left cursor-pointer",
 									"text-gray-700 dark:text-gray-300",
 									"data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700/50",
@@ -84,12 +109,32 @@ export function CustomSelect({
 									"focus:outline-none"
 								)}
 							>
-								<Select.ItemIndicator>
-									<Check className="w-4 h-4" />
-								</Select.ItemIndicator>
-								<Select.ItemText className="data-[state=checked]:ml-0 ml-7">
-									{option.label}
-								</Select.ItemText>
+								<div className="flex items-stretch gap-3 w-full">
+									{option.icon && (
+										<span className="inline-flex items-center justify-center w-10 rounded-xl bg-white/30 dark:bg-gray-800/60 text-gray-700 dark:text-gray-100 self-stretch">
+											{option.icon}
+										</span>
+									)}
+
+									<div className="flex flex-col justify-center flex-1 min-w-0">
+										<Select.ItemText asChild>
+											<span className="font-semibold text-sm leading-tight text-left truncate">
+												{option.label}
+											</span>
+										</Select.ItemText>
+										{option.description && (
+											<span className="text-xs text-gray-700 dark:text-gray-300/80 leading-tight text-left truncate transition-colors group-data-[state=checked]:text-white/80 group-data-[highlighted]:text-gray-900 dark:group-data-[highlighted]:text-gray-100">
+												{option.description}
+											</span>
+										)}
+									</div>
+
+									<div className="flex items-center justify-center w-8 self-stretch">
+										<Select.ItemIndicator className="flex items-center justify-center w-full h-full text-white">
+											<Check className="w-4 h-4" />
+										</Select.ItemIndicator>
+									</div>
+								</div>
 							</Select.Item>
 						))}
 					</Select.Viewport>

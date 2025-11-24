@@ -25,26 +25,82 @@ export const scraperApi = {
 // Comparison endpoints
 export const comparisonApi = {
 	getComparison: (
-		view: "normalized" | "overlap" | "complete" | "comparable" = "normalized",
+		view:
+			| "normalized"
+			| "normalized_fine"
+			| "overlap"
+			| "complete"
+			| "comparable" = "normalized",
 		sessionId?: number,
-		includePrevious: boolean = false
+		includePrevious: boolean = false,
+		fuelCategory?: string,
+		market?: string,
+		carriers?: string[]
+	) => {
+		const params: Record<string, any> = {
+			view,
+			include_previous: includePrevious,
+		};
+
+		if (sessionId !== undefined) params.session_id = sessionId;
+		if (fuelCategory && fuelCategory !== "all")
+			params.fuel_category = fuelCategory;
+		if (market) params.market = market;
+		if (carriers && carriers.length > 0) params.carriers = carriers.join(",");
+
+		return api.get("/comparison/compare", { params });
+	},
+
+	getComparisonMultiCurves: (
+		view:
+			| "normalized"
+			| "normalized_fine"
+			| "overlap"
+			| "complete"
+			| "comparable" = "normalized",
+		curveVersionIds: number[],
+		fuelCategory?: string,
+		market?: string,
+		carriers?: string[]
+	) => {
+		const params: Record<string, any> = {
+			view,
+			curve_version_ids: curveVersionIds.join(","),
+		};
+
+		if (fuelCategory && fuelCategory !== "all")
+			params.fuel_category = fuelCategory;
+		if (market) params.market = market;
+		if (carriers && carriers.length > 0) params.carriers = carriers.join(",");
+
+		return api.get("/comparison/compare", { params });
+	},
+
+	getCarrierFocus: (
+		carrier: string,
+		sessionId?: number,
+		fuelCategory?: string,
+		market?: string
 	) =>
-		api.get("/comparison/compare", {
+		api.get(`/comparison/carrier/${carrier}`, {
 			params: {
-				view,
 				session_id: sessionId,
-				include_previous: includePrevious,
+				fuel_category: fuelCategory !== "all" ? fuelCategory : undefined,
+				market,
 			},
 		}),
 
-	getCarrierFocus: (carrier: string, sessionId?: number) =>
-		api.get(`/comparison/carrier/${carrier}`, {
-			params: { session_id: sessionId },
-		}),
-
-	getCarrierLastUpdates: (sessionId?: number) =>
+	getCarrierLastUpdates: (
+		sessionId?: number,
+		fuelCategory?: string,
+		market?: string
+	) =>
 		api.get("/comparison/carrier-last-updates", {
-			params: { session_id: sessionId },
+			params: {
+				session_id: sessionId,
+				fuel_category: fuelCategory !== "all" ? fuelCategory : undefined,
+				market,
+			},
 		}),
 };
 
@@ -55,10 +111,25 @@ export const historyApi = {
 	getSessionDetails: (sessionId: number) =>
 		api.get(`/history/sessions/${sessionId}/details`),
 
-	getTrends: (carriers?: string[], days = 30) =>
-		api.get("/history/trends", {
-			params: { carriers, days },
-		}),
+	getTrends: (
+		carriers?: string[],
+		days?: number,
+		fuelCategory?: string,
+		market?: string,
+		startDate?: string,
+		endDate?: string
+	) => {
+		const params: any = {};
+		// Send carriers as array - axios will convert to multiple query params
+		if (carriers && carriers.length > 0) params.carriers = carriers.join(",");
+		if (days !== undefined) params.days = days;
+		if (fuelCategory && fuelCategory !== "all")
+			params.fuel_category = fuelCategory;
+		if (market) params.market = market;
+		if (startDate) params.start_date = startDate;
+		if (endDate) params.end_date = endDate;
+		return api.get("/history/trends", { params });
+	},
 
 	getChanges: (thresholdPct = 0.5) =>
 		api.get("/history/changes", {
@@ -87,6 +158,38 @@ export const aiApi = {
 
 	getAllInsights: (sessionId?: number) =>
 		api.post("/ai/all-insights", { session_id: sessionId }),
+};
+
+// Metadata endpoints
+export const metadataApi = {
+	getFilterOptions: () => api.get("/metadata/filters"),
+	getInflectionSkipList: () => api.get("/metadata/inflection-skip-list"),
+};
+
+// Fuel curve versions endpoints
+export const fuelCurveApi = {
+	getVersions: (market?: string, fuelCategory?: string, carriers?: string[]) => {
+		const params: Record<string, any> = {};
+		if (market) params.market = market;
+		if (fuelCategory && fuelCategory !== "all") params.fuel_category = fuelCategory;
+		if (carriers && carriers.length > 0) params.carriers = carriers.join(",");
+		
+		return api.get("/fuel-curves/versions", { params });
+	},
+};
+
+// Overview analytics endpoints
+export const overviewApi = {
+	getAnalytics: (market: string, fuelCategory: string, outlierThreshold: number = 2.0) =>
+		api.get("/overview/analytics", {
+			params: {
+				market,
+				fuel_category: fuelCategory,
+				outlier_threshold: outlierThreshold,
+			},
+		}),
+
+	getAvailableContexts: () => api.get("/overview/available-contexts"),
 };
 
 export default api;
