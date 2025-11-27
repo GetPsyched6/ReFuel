@@ -48,14 +48,29 @@ export function findInflection(bands: Band[]): number | null {
 		return null;
 	}
 
-	// Establish baseline from early bands (first ~30%, minimum 3)
-	const earlyWindowSize = Math.max(
-		2,
-		Math.min(3, Math.floor(stepWidths.length * 0.3))
-	);
-	const earlyWidths = stepWidths.slice(0, earlyWindowSize);
+	// EDGE CASE: Check for immediate inflection between band 0 and band 1
+	// If stepWidths[1] is drastically different from stepWidths[0], inflection is at band 1
+	const ratio01 = stepWidths[1] / stepWidths[0];
+	if (ratio01 < 0.5 || ratio01 > 2.0) {
+		// Verify it's sustained (band 2 continues the new pattern)
+		if (stepWidths.length >= 3) {
+			const ratio12 = stepWidths[2] / stepWidths[1];
+			// If band 2 is similar to band 1 (within 50%), inflection confirmed at band 1
+			if (ratio12 > 0.5 && ratio12 < 2.0) {
+				return sortedBands[1].at_least_usd;
+			}
+		}
+	}
+
+	// NORMAL CASE: Establish baseline from first 2 bands
+	// (We already checked for immediate inflection above, so both should be similar)
+	const baselineWindowSize = 2;
+	const earlyWidths = stepWidths.slice(0, baselineWindowSize);
 	const baselineWidth =
 		earlyWidths.reduce((sum, w) => sum + w, 0) / earlyWidths.length;
+	
+	// Start searching from index 2 (right after baseline)
+	const searchStartIndex = baselineWindowSize;
 
 	// Thresholds for detecting change
 	const narrowThreshold = baselineWidth * 0.7; // 70% of baseline = significantly narrower
@@ -63,7 +78,7 @@ export function findInflection(bands: Band[]): number | null {
 	const minConsecutive = 2;
 
 	// Look for wide-to-narrow inflection (most common case)
-	for (let i = earlyWindowSize; i <= stepWidths.length - minConsecutive; i++) {
+	for (let i = searchStartIndex; i <= stepWidths.length - minConsecutive; i++) {
 		let consecutiveNarrow = 0;
 
 		for (let j = i; j < Math.min(stepWidths.length, i + 4); j++) {
@@ -80,7 +95,7 @@ export function findInflection(bands: Band[]): number | null {
 	}
 
 	// Look for narrow-to-wide inflection (less common)
-	for (let i = earlyWindowSize; i <= stepWidths.length - minConsecutive; i++) {
+	for (let i = searchStartIndex; i <= stepWidths.length - minConsecutive; i++) {
 		let consecutiveWide = 0;
 
 		for (let j = i; j < Math.min(stepWidths.length, i + 4); j++) {

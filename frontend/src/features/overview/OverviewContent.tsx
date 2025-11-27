@@ -76,12 +76,15 @@ interface OverviewData {
 		delta_pp: number;
 	}>;
 	cadence_data?: {
-		carrier_updates: Record<string, Array<{
-			date: string;
-			old_pct: number;
-			new_pct: number;
-			service: string;
-		}>>;
+		carrier_updates: Record<
+			string,
+			Array<{
+				date: string;
+				old_pct: number;
+				new_pct: number;
+				service: string;
+			}>
+		>;
 	};
 	relative_index_data?: {
 		carrier_indices: Array<{
@@ -115,7 +118,9 @@ export default function OverviewContent({
 	const [data, setData] = useState<OverviewData | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [visibleCarriers, setVisibleCarriers] = useState<Set<string>>(new Set());
+	const [visibleCarriers, setVisibleCarriers] = useState<Set<string>>(
+		new Set()
+	);
 
 	useEffect(() => {
 		loadOverviewData();
@@ -235,7 +240,9 @@ export default function OverviewContent({
 		);
 	}
 
-	const contextLabel = `${selectedCountry} • ${SERVICE_TYPE_LABELS[selectedServiceType] || selectedServiceType}`;
+	const contextLabel = `${selectedCountry} • ${
+		SERVICE_TYPE_LABELS[selectedServiceType] || selectedServiceType
+	}`;
 
 	return (
 		<div className="space-y-6">
@@ -302,9 +309,7 @@ export default function OverviewContent({
 								)}
 								style={{
 									borderColor: isVisible ? color : "transparent",
-									backgroundColor: isVisible
-										? `${color}20`
-										: undefined,
+									backgroundColor: isVisible ? `${color}20` : undefined,
 									color: isVisible ? color : undefined,
 								}}
 							>
@@ -350,21 +355,48 @@ export default function OverviewContent({
 								}}
 							/>
 							<Legend />
-							{data.carriers.map((carrier) => {
-								if (!visibleCarriers.has(carrier)) return null;
+							{/* Sort carriers so thicker lines render first (bottom) and thinner lines render last (top) */}
+							{(() => {
+								const carrierStyles: Record<
+									string,
+									{ strokeWidth: number; dotRadius: number }
+								> = {
+									UPS: { strokeWidth: 3, dotRadius: 5 },
+									FedEx: { strokeWidth: 2, dotRadius: 4 },
+									DHL: { strokeWidth: 2, dotRadius: 4 },
+								};
 
-								return (
-									<Line
-										key={carrier}
-										type="monotone"
-										dataKey={carrier}
-										stroke={getCarrierBrandColor(carrier)}
-										strokeWidth={2}
-										dot={{ r: 3 }}
-										connectNulls
-									/>
-								);
-							})}
+								// Sort by strokeWidth descending so thicker lines are at the back
+								const sortedCarriers = [...data.carriers].sort((a, b) => {
+									const aStyle = carrierStyles[a] || { strokeWidth: 2 };
+									const bStyle = carrierStyles[b] || { strokeWidth: 2 };
+									return bStyle.strokeWidth - aStyle.strokeWidth;
+								});
+
+								return sortedCarriers.map((carrier, index) => {
+									if (!visibleCarriers.has(carrier)) return null;
+
+									const style = carrierStyles[carrier] || {
+										strokeWidth: 2,
+										dotRadius: 3 + index,
+									};
+
+									return (
+										<Line
+											key={carrier}
+											type="monotone"
+											dataKey={carrier}
+											stroke={getCarrierBrandColor(carrier)}
+											strokeWidth={style.strokeWidth}
+											dot={{
+												fill: getCarrierBrandColor(carrier),
+												r: style.dotRadius,
+											}}
+											connectNulls
+										/>
+									);
+								});
+							})()}
 						</LineChart>
 					</ResponsiveContainer>
 				) : (
@@ -391,12 +423,8 @@ export default function OverviewContent({
 						<table className="w-full">
 							<thead>
 								<tr className="border-b border-gray-200 dark:border-gray-700">
-									<th className="text-left py-3 px-4 font-semibold">
-										Carrier
-									</th>
-									<th className="text-left py-3 px-4 font-semibold">
-										Service
-									</th>
+									<th className="text-left py-3 px-4 font-semibold">Carrier</th>
+									<th className="text-left py-3 px-4 font-semibold">Service</th>
 									<th className="text-center py-3 px-4 font-semibold">
 										Latest %
 									</th>
@@ -422,9 +450,7 @@ export default function OverviewContent({
 											<td className="py-3 px-4 font-semibold">
 												{movement.carrier}
 											</td>
-											<td className="py-3 px-4 text-sm">
-												{movement.service}
-											</td>
+											<td className="py-3 px-4 text-sm">{movement.service}</td>
 											<td className="py-3 px-4 text-center">
 												<span className="inline-block px-3 py-1 rounded-full font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
 													{movement.latest_pct.toFixed(2)}%
@@ -529,9 +555,7 @@ export default function OverviewContent({
 												<td className="py-3 px-4 font-semibold">
 													{outlier.carrier}
 												</td>
-												<td className="py-3 px-4 text-sm">
-													{outlier.service}
-												</td>
+												<td className="py-3 px-4 text-sm">{outlier.service}</td>
 												<td className="py-3 px-4 text-center">
 													<span className="inline-block px-3 py-1 rounded-full font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
 														{outlier.surcharge_pct.toFixed(2)}%
@@ -569,38 +593,37 @@ export default function OverviewContent({
 				</Card>
 			)}
 
-		{/* New Visualization Tiles */}
-		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-			{/* Outlier Scatter */}
-			<OutlierScatter
-				data={data.scatter_data || []}
-				threshold={data.outlier_threshold_pp}
-				carriers={data.carriers}
+			{/* New Visualization Tiles */}
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+				{/* Outlier Scatter */}
+				<OutlierScatter
+					data={data.scatter_data || []}
+					threshold={data.outlier_threshold_pp}
+					carriers={data.carriers}
+				/>
+
+				{/* Cadence Heatmap */}
+				<CadenceHeatmap
+					carrierUpdates={data.cadence_data?.carrier_updates || {}}
+					carriers={data.carriers}
+				/>
+			</div>
+
+			{/* Relative Surcharge Index - Full Width */}
+			<RelativeSurchargeIndex
+				carrierIndices={data.relative_index_data?.carrier_indices || []}
+				windowSize={data.relative_index_data?.window_size || 0}
+				hasData={data.relative_index_data?.has_data || false}
+				numCarriers={data.relative_index_data?.num_carriers || 0}
+				cheapestCarrier={data.relative_index_data?.cheapest_carrier}
+				message={data.relative_index_data?.message}
 			/>
 
-			{/* Cadence Heatmap */}
-			<CadenceHeatmap
-				carrierUpdates={data.cadence_data?.carrier_updates || {}}
-				carriers={data.carriers}
+			{/* Fuel Curve Version Comparison - Shows only if carrier has multiple versions */}
+			<FuelCurveVersionComparison
+				market={selectedCountry}
+				fuelCategory={selectedServiceType}
 			/>
 		</div>
-
-		{/* Relative Surcharge Index - Full Width */}
-		<RelativeSurchargeIndex
-			carrierIndices={data.relative_index_data?.carrier_indices || []}
-			windowSize={data.relative_index_data?.window_size || 0}
-			hasData={data.relative_index_data?.has_data || false}
-			numCarriers={data.relative_index_data?.num_carriers || 0}
-			cheapestCarrier={data.relative_index_data?.cheapest_carrier}
-			message={data.relative_index_data?.message}
-		/>
-
-		{/* Fuel Curve Version Comparison - Shows only if carrier has multiple versions */}
-		<FuelCurveVersionComparison
-			market={selectedCountry}
-			fuelCategory={selectedServiceType}
-		/>
-	</div>
 	);
 }
-
