@@ -36,37 +36,29 @@ const CARRIER_COLORS: Record<string, string> = {
 	DPD: "#10B981",
 };
 
+// Different sizes and stroke widths for each carrier to distinguish overlapping points
+const CARRIER_STYLES: Record<string, { size: number; strokeWidth: number }> = {
+	UPS: { size: 90, strokeWidth: 3 },
+	FedEx: { size: 60, strokeWidth: 2 },
+	DHL: { size: 45, strokeWidth: 1.5 },
+	DPD: { size: 35, strokeWidth: 1 },
+};
+
 export default function OutlierScatter({
 	data,
 	threshold,
 	carriers,
 }: OutlierScatterProps) {
 	const chartData = useMemo(() => {
-		const grouped: Record<string, typeof data> = {};
-		
-		data.forEach((point) => {
-			const key = `${point.date}-${point.delta_pp.toFixed(2)}`;
-			if (!grouped[key]) {
-				grouped[key] = [];
-			}
-			grouped[key].push(point);
-		});
-
-		const result: any[] = [];
-		Object.values(grouped).forEach((points) => {
-			points.forEach((point, idx) => {
-				const jitter = points.length > 1 ? (idx - (points.length - 1) / 2) * 0.15 : 0;
-				result.push({
-					...point,
-					x: new Date(point.date).getTime(),
-					y: point.delta_pp + jitter,
-					size: Math.abs(point.delta_pp) * 15 + 60,
-					key: `${point.date}-${point.carrier}-${idx}`,
-				});
-			});
-		});
-
-		return result;
+		// No more jittering - use different sizes/strokes to distinguish carriers
+		return data.map((point) => ({
+			...point,
+			x: new Date(point.date).getTime(),
+			y: point.delta_pp,
+			size: (CARRIER_STYLES[point.carrier]?.size || 50) + Math.abs(point.delta_pp) * 10,
+			strokeWidth: CARRIER_STYLES[point.carrier]?.strokeWidth || 2,
+			key: `${point.date}-${point.carrier}`,
+		}));
 	}, [data]);
 
 	const dataByCarrier = useMemo(() => {
@@ -103,35 +95,76 @@ export default function OutlierScatter({
 		});
 	};
 
+	// Group points by date for finding overlaps
+	const pointsByDate = useMemo(() => {
+		const grouped: Record<string, typeof chartData> = {};
+		chartData.forEach((point) => {
+			if (!grouped[point.date]) {
+				grouped[point.date] = [];
+			}
+			grouped[point.date].push(point);
+		});
+		return grouped;
+	}, [chartData]);
+
 	const CustomTooltip = ({ active, payload }: any) => {
 		if (!active || !payload || !payload.length) return null;
 
-		const data = payload[0].payload;
+		const hoveredPoint = payload[0].payload;
+		
+		// Find all points at the same date (overlapping carriers)
+		const overlappingPoints = pointsByDate[hoveredPoint.date] || [hoveredPoint];
 
 		return (
-			<div className="backdrop-blur-xl bg-gray-900/95 dark:bg-gray-800/95 border-2 border-gray-700 rounded-lg p-3 shadow-2xl">
-				<div className="text-xs space-y-1">
-					<div className="font-bold text-white">{data.date}</div>
-					<div className="text-blue-300">{data.carrier}</div>
-					<div className="text-gray-300">{data.service}</div>
-					<div className="border-t border-gray-600 my-1 pt-1">
-						<div className="text-gray-300">
-							Surcharge: <span className="font-semibold text-white">{data.surcharge_pct}%</span>
+			<div className="backdrop-blur-xl bg-gray-900/95 dark:bg-gray-800/95 border-2 border-gray-700 rounded-lg p-3 shadow-2xl max-w-xs">
+				<div className="text-xs">
+					<div className="font-bold text-white mb-2">{hoveredPoint.date}</div>
+					
+					{overlappingPoints.length > 1 && (
+						<div className="text-[10px] text-gray-400 mb-2 uppercase tracking-wide">
+							{overlappingPoints.length} carriers at this date
 						</div>
-						<div className="text-gray-300">
-							Median: <span className="font-semibold text-white">{data.median_pct}%</span>
-						</div>
-						<div
-							className={cn(
-								"font-bold",
-								Math.abs(data.delta_pp) > threshold
-									? "text-red-400"
-									: "text-green-400"
-							)}
-						>
-							Delta: {data.delta_pp > 0 ? "+" : ""}
-							{data.delta_pp.toFixed(2)} pp
-						</div>
+					)}
+					
+					<div className="space-y-2">
+						{overlappingPoints.map((point, idx) => (
+							<div 
+								key={point.carrier} 
+								className={cn(
+									"pb-2",
+									idx < overlappingPoints.length - 1 && "border-b border-gray-600"
+								)}
+							>
+								<div className="flex items-center gap-2 mb-1">
+									<div 
+										className="w-2.5 h-2.5 rounded-full"
+										style={{ backgroundColor: CARRIER_COLORS[point.carrier] || "#6B7280" }}
+									/>
+									<span className="font-semibold" style={{ color: CARRIER_COLORS[point.carrier] || "#9CA3AF" }}>
+										{point.carrier}
+									</span>
+								</div>
+								<div className="pl-4 space-y-0.5 text-gray-300">
+									<div>
+										Surcharge: <span className="font-semibold text-white">{point.surcharge_pct}%</span>
+									</div>
+									<div>
+										Median: <span className="font-semibold text-white">{point.median_pct}%</span>
+									</div>
+									<div
+										className={cn(
+											"font-bold",
+											Math.abs(point.delta_pp) > threshold
+												? "text-red-400"
+												: "text-green-400"
+										)}
+									>
+										Delta: {point.delta_pp > 0 ? "+" : ""}
+										{point.delta_pp.toFixed(2)} pp
+									</div>
+								</div>
+							</div>
+						))}
 					</div>
 				</div>
 			</div>
@@ -231,9 +264,11 @@ export default function OutlierScatter({
 						opacity={0.5}
 					/>
 
-					{carriers.map((carrier) => {
+					{/* Render in reverse order so smaller carriers appear on top */}
+					{[...carriers].reverse().map((carrier) => {
 						const carrierData = dataByCarrier[carrier] || [];
 						if (carrierData.length === 0) return null;
+						const style = CARRIER_STYLES[carrier] || { size: 50, strokeWidth: 2 };
 
 						return (
 							<Scatter
@@ -242,7 +277,7 @@ export default function OutlierScatter({
 								data={carrierData}
 								fill={CARRIER_COLORS[carrier] || "#6B7280"}
 								stroke={CARRIER_COLORS[carrier] || "#6B7280"}
-								strokeWidth={2}
+								strokeWidth={style.strokeWidth}
 								fillOpacity={0.6}
 							/>
 						);

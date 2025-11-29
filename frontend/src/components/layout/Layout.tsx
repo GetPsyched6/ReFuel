@@ -89,11 +89,11 @@ export default function Layout({
 							className="flex items-center gap-3 flex-shrink-0"
 						>
 							<div className="w-10 h-10 rounded-lg gradient-ups flex items-center justify-center text-white font-bold">
-								RF
+								FS
 							</div>
 							<div>
 								<h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-									ReFuel
+									Fuel Surcharge PoC
 								</h1>
 								<p className="text-xs text-gray-600 dark:text-gray-400">
 									Competitive Intelligence

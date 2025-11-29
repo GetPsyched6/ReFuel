@@ -1,4 +1,4 @@
-# ReFuel - Competitive Intelligence Platform
+# Fuel Surcharge PoC - Competitive Intelligence Platform
 
 A comprehensive fuel surcharge competitive intelligence platform for UPS, featuring real-time scraping, AI-powered insights, and beautiful data visualization.
 

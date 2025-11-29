@@ -145,6 +145,141 @@ class AIService:
         self.model = settings.WATSONX_MODEL
         self.base_url = settings.WATSONX_URL
         self.token_manager = WatsonxTokenManager() if self.api_key else None
+        
+        # In-memory cache for AI insights
+        # Structure: { cache_key: { data: {...}, timestamp: datetime, data_hash: str } }
+        self._insights_cache: Dict[str, Dict] = {}
+        self._cache_ttl = timedelta(hours=24)  # Cache valid for 24 hours unless data changes
+    
+    # ==================== CACHING METHODS ====================
+    
+    async def _compute_data_hash(self, market: str, fuel_category: str) -> str:
+        """Compute a hash of the current fuel curve data for cache invalidation"""
+        import hashlib
+        
+        # Get current fuel curve data for this market/category
+        data = await self._get_fuel_curve_data(market, fuel_category)
+        
+        # Create a deterministic string representation
+        data_str = json.dumps(data, sort_keys=True, default=str)
+        return hashlib.md5(data_str.encode()).hexdigest()
+    
+    async def get_cached_insights(self, cache_key: str) -> Optional[Dict]:
+        """Get cached insights if valid (not expired and data hasn't changed)"""
+        if cache_key not in self._insights_cache:
+            return None
+        
+        cached = self._insights_cache[cache_key]
+        
+        # Check TTL
+        if datetime.now() - cached['timestamp'] > self._cache_ttl:
+            print(f"⚠️ Cache expired for {cache_key}")
+            del self._insights_cache[cache_key]
+            return None
+        
+        # Check if data has changed
+        parts = cache_key.split('_', 1)
+        if len(parts) == 2:
+            market, fuel_category = parts
+            current_hash = await self._compute_data_hash(market, fuel_category)
+            if current_hash != cached.get('data_hash'):
+                print(f"⚠️ Data changed for {cache_key}, invalidating cache")
+                del self._insights_cache[cache_key]
+                return None
+        
+        return cached['data']
+    
+    async def cache_insights(self, cache_key: str, data: Dict) -> None:
+        """Cache insights with current data hash"""
+        parts = cache_key.split('_', 1)
+        data_hash = ""
+        if len(parts) == 2:
+            market, fuel_category = parts
+            data_hash = await self._compute_data_hash(market, fuel_category)
+        
+        self._insights_cache[cache_key] = {
+            'data': data,
+            'timestamp': datetime.now(),
+            'data_hash': data_hash
+        }
+        print(f"✓ Cached AI insights for {cache_key}")
+    
+    async def invalidate_cache(self, cache_key: str) -> None:
+        """Invalidate specific cache entry"""
+        if cache_key in self._insights_cache:
+            del self._insights_cache[cache_key]
+            print(f"✓ Invalidated cache for {cache_key}")
+    
+    async def update_cached_insight(self, cache_key: str, insight_key: str, data: dict) -> None:
+        """Update a single insight in the cache (merge with existing)"""
+        if cache_key in self._insights_cache:
+            # Update existing cache entry
+            self._insights_cache[cache_key]['data'][insight_key] = data
+            self._insights_cache[cache_key]['timestamp'] = datetime.now()
+            print(f"✓ Updated {insight_key} in cache for {cache_key}")
+        else:
+            # Create new cache entry with just this insight
+            parts = cache_key.split('_', 1)
+            data_hash = ""
+            if len(parts) == 2:
+                market, fuel_category = parts
+                data_hash = await self._compute_data_hash(market, fuel_category)
+            
+            self._insights_cache[cache_key] = {
+                'data': {insight_key: data},
+                'timestamp': datetime.now(),
+                'data_hash': data_hash
+            }
+            print(f"✓ Created cache for {cache_key} with {insight_key}")
+    
+    async def invalidate_all_cache(self) -> None:
+        """Invalidate all cached insights"""
+        self._insights_cache.clear()
+        print("✓ Invalidated all AI caches")
+    
+    # ==================== DATA RETRIEVAL ====================
+    
+    async def _get_fuel_curve_data(self, market: str, fuel_category: str) -> List[Dict]:
+        """
+        Get fuel curve data filtered by market and fuel_category.
+        Returns data for ALL carriers that have data for this filter combination.
+        """
+        # Get all current (is_active=1) fuel curve versions for this market/category
+        versions_query = """
+            SELECT id, carrier, service, fuel_type, effective_date, label
+            FROM fuel_curve_versions 
+            WHERE market = ? AND fuel_category = ? AND is_active = 1
+            ORDER BY carrier
+        """
+        versions = await db.execute_query(versions_query, (market, fuel_category))
+        
+        if not versions:
+            print(f"⚠️ No fuel curve versions found for {market}/{fuel_category}")
+            return []
+        
+        # Get all fuel surcharge data for these versions
+        version_ids = [v['id'] for v in versions]
+        placeholders = ','.join(['?' for _ in version_ids])
+        
+        data_query = f"""
+            SELECT 
+                fs.carrier, fs.service, fs.at_least_usd, fs.but_less_than_usd, fs.surcharge_pct,
+                fcv.fuel_type, fcv.market, fcv.fuel_category
+            FROM fuel_surcharges fs
+            JOIN fuel_curve_versions fcv ON fs.curve_version_id = fcv.id
+            WHERE fcv.id IN ({placeholders})
+            ORDER BY fs.carrier, fs.at_least_usd
+        """
+        data = await db.execute_query(data_query, tuple(version_ids))
+        
+        print(f"✓ Retrieved {len(data)} fuel curve data points for {market}/{fuel_category} ({len(versions)} carriers)")
+        return data
+    
+    def _get_currency_info(self, market: str, fuel_category: str) -> Dict[str, str]:
+        """Get currency symbol and unit for display"""
+        if market == "DE" and fuel_category in ["ground_domestic", "ground_regional"]:
+            return {"symbol": "€", "unit": "EUR", "per_unit": "/L"}
+        return {"symbol": "$", "unit": "USD", "per_unit": "/gal"}
     
     async def _call_watsonx(self, prompt: str, max_tokens: int = 500, temperature: float = 0.7) -> str:
         """Call Watsonx API with prompt"""
@@ -192,6 +327,23 @@ class AIService:
     def _parse_json_aggressive(self, text: str) -> Optional[Dict]:
         """Wrapper for centralized JSON parser"""
         return parse_ai_json_response(text)
+    
+    async def _call_watsonx_with_retry(self, prompt: str, max_tokens: int = 500, temperature: float = 0.7, retries: int = 2) -> str:
+        """Call Watsonx API with automatic retry on failure/empty response"""
+        last_response = ""
+        for attempt in range(retries + 1):
+            try:
+                response = await self._call_watsonx(prompt, max_tokens, temperature)
+                # Check if response is too short or looks invalid
+                if response and len(response.strip()) > 20:
+                    return response
+                last_response = response
+                print(f"⚠️ Attempt {attempt + 1}: Response too short ({len(response)} chars), retrying...")
+            except Exception as e:
+                print(f"⚠️ Attempt {attempt + 1} failed: {e}")
+                if attempt == retries:
+                    raise
+        return last_response
     
     def _parse_text_fallback(self, text: str) -> Dict:
         """Fallback text parsing for insights"""
@@ -1347,6 +1499,510 @@ Generate 5-7 HIGH-IMPACT recommendations. Start with {{:
                 "recommendations": [],
                 "metadata": {"note": f"Error: {str(e)}", "_is_fallback": True}
             }
+    
+    # ==================== FILTER-BASED METHODS ====================
+    # These methods use market + fuel_category filters and consider ALL carriers
+    
+    async def generate_quick_insights_filtered(self, market: str, fuel_category: str) -> Dict:
+        """Generate quick insights for a specific market/fuel_category."""
+        if not self.token_manager:
+            return {
+                "competitive_gaps": "AI service not configured",
+                "urgent_actions": "Please configure Watsonx credentials",
+                "trend_summary": "Data available for manual analysis"
+            }
+        
+        try:
+            # Get filtered data
+            current_data = await self._get_fuel_curve_data(market, fuel_category)
+            
+            if not current_data:
+                return {
+                    "competitive_gaps": f"No fuel curve data available for {market} {fuel_category}",
+                    "urgent_actions": "No data to analyze",
+                    "trend_summary": "Please select a different filter combination"
+                }
+            
+            currency = self._get_currency_info(market, fuel_category)
+            
+            # Organize by carrier
+            by_carrier: Dict[str, List[Dict]] = {}
+            for row in current_data:
+                carrier = row['carrier']
+                if carrier not in by_carrier:
+                    by_carrier[carrier] = []
+                by_carrier[carrier].append({
+                    'range': f"{currency['symbol']}{row['at_least_usd']:.2f}-{currency['symbol']}{row['but_less_than_usd']:.2f}",
+                    'min': row['at_least_usd'],
+                    'max': row['but_less_than_usd'],
+                    'pct': row['surcharge_pct']
+                })
+            
+            carriers_list = list(by_carrier.keys())
+            
+            # Calculate summaries
+            carrier_summaries = {}
+            for carrier, items in by_carrier.items():
+                rates = [i['pct'] for i in items]
+                carrier_summaries[carrier] = {
+                    'avg': round(sum(rates) / len(rates), 2),
+                    'min': round(min(rates), 2),
+                    'max': round(max(rates), 2),
+                    'count': len(rates),
+                    'entry_range': items[0]['range'],
+                    'entry_pct': items[0]['pct']
+                }
+            
+            # Find EXACT overlapping ranges - same price bands
+            overlap_comparison = []
+            ups_data = by_carrier.get('UPS', [])
+            for ups_item in ups_data:
+                comparison = {
+                    'range': ups_item['range'],
+                    'UPS': ups_item['pct']
+                }
+                for other_carrier in ['FedEx', 'DHL']:
+                    if other_carrier in by_carrier:
+                        # Find EXACT match
+                        for other_item in by_carrier[other_carrier]:
+                            if abs(other_item['min'] - ups_item['min']) < 0.01 and abs(other_item['max'] - ups_item['max']) < 0.01:
+                                comparison[other_carrier] = other_item['pct']
+                                break
+                if len(comparison) > 2:
+                    # Calculate actual differences
+                    diffs = {}
+                    for k, v in comparison.items():
+                        if k != 'range' and k != 'UPS':
+                            diffs[k] = round(comparison['UPS'] - v, 2)
+                    comparison['ups_vs_others'] = diffs
+                    overlap_comparison.append(comparison)
+            
+            # Build data context
+            data_summary = "\n".join([
+                f"- {carrier}: {s['count']} ranges, avg {s['avg']}%, min {s['min']}%, max {s['max']}%"
+                for carrier, s in carrier_summaries.items()
+            ])
+            
+            overlap_text = "\nOVERLAPPING RANGES (exact same price bands):\n"
+            if overlap_comparison:
+                for comp in overlap_comparison[:8]:
+                    range_str = comp['range']
+                    ups_pct = comp['UPS']
+                    others = [f"{k}:{v}%" for k, v in comp.items() if k not in ['range', 'UPS', 'ups_vs_others']]
+                    diffs = comp.get('ups_vs_others', {})
+                    diff_str = ", ".join([f"UPS vs {k}: {'+' if v > 0 else ''}{v}pp" for k, v in diffs.items()])
+                    overlap_text += f"  {range_str}: UPS={ups_pct}%, {', '.join(others)} | {diff_str if diff_str else 'No competitors'}\n"
+            else:
+                overlap_text += "  No exact overlapping ranges found\n"
+            
+            prompt = f"""Analyze {market} {fuel_category.replace('_', ' ')} fuel surcharge data.
+
+CURRENCY: {currency['symbol']} {currency['per_unit']}
+CARRIERS: {', '.join(carriers_list)}
+
+{data_summary}
+
+{overlap_text}
+
+Return JSON analysis. Be accurate - if carriers have identical rates, say "at parity". Only report real differences.
+
+{{
+  "competitive_gaps": "Where are the actual pricing differences? If rates match, state that clearly. Only mention gaps that exist in the data.",
+  
+  "urgent_actions": "Strategic recommendation based on the data. If rates match competitors, suggest focusing on service differentiation. If there's a gap, note it objectively.",
+  
+  "trend_summary": "Market structure observation - coverage differences, unique ranges, competitive positioning."
+}}
+
+Use {currency['symbol']} for currency. Be factual.
+
+{{"""
+
+            response_text = await self._call_watsonx(prompt, max_tokens=800, temperature=0.3)
+            parsed = parse_ai_json_response(response_text)
+            
+            if parsed:
+                parsed['_is_fallback'] = False
+                parsed['_market'] = market
+                parsed['_fuel_category'] = fuel_category
+                parsed['_carriers_analyzed'] = carriers_list
+                return parsed
+            
+            # Fallback with actual data
+            return {
+                "competitive_gaps": f"Analysis available for {', '.join(carriers_list)} in {market} {fuel_category}. AI parsing failed.",
+                "urgent_actions": "Review carrier data manually for competitive insights.",
+                "trend_summary": f"Data covers {len(current_data)} price ranges across {len(carriers_list)} carriers.",
+                "_is_fallback": True,
+                "_market": market,
+                "_fuel_category": fuel_category
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Quick insights filtered error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "competitive_gaps": "Analysis temporarily unavailable",
+                "urgent_actions": "Please try again later",
+                "trend_summary": f"Error: {str(e)}",
+                "_is_fallback": True
+            }
+    
+    async def generate_executive_analysis_filtered(self, market: str, fuel_category: str) -> Dict:
+        """
+        Generate executive analysis for a specific market/fuel_category.
+        """
+        if not self.token_manager:
+            return self._generate_fallback_executive_analysis_filtered(market, fuel_category)
+        
+        try:
+            current_data = await self._get_fuel_curve_data(market, fuel_category)
+            
+            if not current_data:
+                return {
+                    "analysis": {
+                        "summary": f"No fuel curve data available for {market} {fuel_category}",
+                        "key_findings": ["No data to analyze"],
+                        "opportunities": [],
+                        "risks": [],
+                        "trend_commentary": "Please select a different filter combination"
+                    },
+                    "metadata": {"market": market, "fuel_category": fuel_category, "_is_fallback": True}
+                }
+            
+            currency = self._get_currency_info(market, fuel_category)
+            
+            # Organize by carrier
+            by_carrier: Dict[str, List[Dict]] = {}
+            for row in current_data:
+                carrier = row['carrier']
+                if carrier not in by_carrier:
+                    by_carrier[carrier] = []
+                by_carrier[carrier].append({
+                    'range': f"{currency['symbol']}{row['at_least_usd']:.2f}-{currency['symbol']}{row['but_less_than_usd']:.2f}",
+                    'min': row['at_least_usd'],
+                    'max': row['but_less_than_usd'],
+                    'pct': row['surcharge_pct']
+                })
+            
+            carriers_list = list(by_carrier.keys())
+            
+            # Build data context
+            data_context = f"FUEL SURCHARGE DATA FOR {market.upper()} {fuel_category.replace('_', ' ').upper()}:\n"
+            data_context += f"Currency: {currency['symbol']} {currency['per_unit']}\n\n"
+            
+            for carrier, items in by_carrier.items():
+                data_context += f"{carrier} ({len(items)} price ranges):\n"
+                for item in items[:20]:  # Show up to 20 ranges
+                    data_context += f"  {item['range']}: {item['pct']}%\n"
+                if len(items) > 20:
+                    data_context += f"  ... and {len(items) - 20} more ranges\n"
+                data_context += "\n"
+            
+            # Build comparison analysis
+            ups_data = by_carrier.get('UPS', [])
+            comparison_summary = "\nRATE COMPARISON (overlapping ranges):\n"
+            for ups_item in ups_data[:15]:
+                ups_range = ups_item['range']
+                ups_pct = ups_item['pct']
+                comparisons = []
+                for other_carrier in ['FedEx', 'DHL']:
+                    if other_carrier in by_carrier:
+                        for other_item in by_carrier[other_carrier]:
+                            if abs(other_item['min'] - ups_item['min']) < 0.01:
+                                diff = ups_pct - other_item['pct']
+                                if abs(diff) < 0.01:
+                                    comparisons.append(f"{other_carrier}: SAME")
+                                else:
+                                    comparisons.append(f"{other_carrier}: {other_item['pct']}% (diff: {'+' if diff > 0 else ''}{diff:.2f}pp)")
+                                break
+                if comparisons:
+                    comparison_summary += f"  {ups_range}: UPS={ups_pct}% | {', '.join(comparisons)}\n"
+            
+            prompt = f"""You are a fuel surcharge analyst. Analyze this {market} {fuel_category.replace('_', ' ')} data and provide a complete executive analysis.
+
+DATA:
+{data_context}
+
+{comparison_summary}
+
+TASK: Generate a complete JSON response with ALL fields filled in with specific data from above. Be accurate - state parity when rates match.
+
+Your response MUST be valid JSON in this exact format:
+{{
+  "summary": "Write 2-3 sentences about the competitive landscape using specific data",
+  "key_findings": [
+    "Write a specific finding using actual numbers",
+    "Write another finding",
+    "Write a coverage observation",
+    "Write a strategic implication"
+  ],
+  "opportunities": [
+    "Write an opportunity based on the data",
+    "Write another opportunity"
+  ],
+  "risks": [
+    "Write a risk based on competitive position",
+    "Write another consideration"
+  ],
+  "trend_commentary": "Write analysis of market structure and positioning"
+}}
+
+IMPORTANT: Fill in ALL fields with complete sentences. Use {currency['symbol']} for currency. Do not use ellipsis (...) or placeholders.
+
+{{"""
+
+            response_text = await self._call_watsonx_with_retry(prompt, max_tokens=2000, temperature=0.4, retries=2)
+            parsed = parse_ai_json_response(response_text)
+            
+            if parsed:
+                return {
+                    "analysis": parsed,
+                    "metadata": {
+                        "market": market,
+                        "fuel_category": fuel_category,
+                        "carriers_analyzed": carriers_list,
+                        "total_ranges": len(current_data),
+                        "generated_at": datetime.now().isoformat(),
+                        "_is_fallback": False
+                    }
+                }
+            
+            print(f"⚠️ Executive Analysis: JSON parsing failed after retries, using fallback")
+            return self._generate_fallback_executive_analysis_filtered(market, fuel_category)
+            
+        except Exception as e:
+            print(f"⚠️ Executive analysis filtered error: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._generate_fallback_executive_analysis_filtered(market, fuel_category)
+    
+    def _generate_fallback_executive_analysis_filtered(self, market: str, fuel_category: str) -> Dict:
+        """Fallback executive analysis"""
+        return {
+            "analysis": {
+                "summary": f"Competitive fuel surcharge data available for {market} {fuel_category.replace('_', ' ')}.",
+                "key_findings": [
+                    "Data successfully retrieved from carriers",
+                    "Rate structures available for comparison",
+                    "AI analysis temporarily unavailable"
+                ],
+                "opportunities": ["Manual review recommended"],
+                "risks": ["Market rates subject to change"],
+                "trend_commentary": "Please try refreshing to generate AI analysis."
+            },
+            "metadata": {
+                "market": market,
+                "fuel_category": fuel_category,
+                "generated_at": datetime.now().isoformat(),
+                "_is_fallback": True
+            }
+        }
+    
+    async def generate_rate_recommendations_filtered(self, market: str, fuel_category: str) -> Dict:
+        """Generate rate recommendations for a specific market/fuel_category."""
+        if not self.token_manager:
+            return {
+                "recommendations": [],
+                "metadata": {"note": "AI unavailable", "market": market, "fuel_category": fuel_category}
+            }
+        
+        try:
+            current_data = await self._get_fuel_curve_data(market, fuel_category)
+            
+            if not current_data:
+                return {
+                    "recommendations": [],
+                    "metadata": {
+                        "note": f"No data for {market} {fuel_category}",
+                        "market": market,
+                        "fuel_category": fuel_category
+                    }
+                }
+            
+            currency = self._get_currency_info(market, fuel_category)
+            
+            # Organize by carrier
+            by_carrier: Dict[str, List[Dict]] = {}
+            for row in current_data:
+                carrier = row['carrier']
+                if carrier not in by_carrier:
+                    by_carrier[carrier] = []
+                by_carrier[carrier].append({
+                    'min': row['at_least_usd'],
+                    'max': row['but_less_than_usd'],
+                    'pct': row['surcharge_pct']
+                })
+            
+            carriers_list = list(by_carrier.keys())
+            
+            # UPS data with competitor comparison
+            ups_data = by_carrier.get('UPS', [])
+            if not ups_data:
+                return {
+                    "recommendations": [],
+                    "metadata": {"note": "No UPS data available", "market": market, "fuel_category": fuel_category}
+                }
+            
+            # Build UPS-centric comparison
+            ups_comparison = []
+            for ups_item in ups_data:
+                entry = {
+                    'price_range_min': ups_item['min'],
+                    'price_range_max': ups_item['max'],
+                    'ups_rate': ups_item['pct'],
+                    'competitors': {}
+                }
+                for other_carrier in ['FedEx', 'DHL']:
+                    if other_carrier in by_carrier:
+                        for other_item in by_carrier[other_carrier]:
+                            if abs(other_item['min'] - ups_item['min']) < 0.01 and abs(other_item['max'] - ups_item['max']) < 0.01:
+                                entry['competitors'][other_carrier] = other_item['pct']
+                                break
+                ups_comparison.append(entry)
+            
+            prompt = f"""You are a pricing analyst. Review the fuel surcharge data below and create 5-7 specific recommendations.
+
+MARKET: {market} {fuel_category.replace('_', ' ')}
+CURRENCY: {currency['symbol']} {currency['per_unit']}
+
+UPS RATES WITH COMPETITOR COMPARISON:
+{json.dumps(ups_comparison[:12], indent=2)}
+
+TASK: Generate exactly 5-7 recommendations. Each recommendation should cover a different price range from the data above.
+
+For each price range, create a recommendation object with:
+- type: "maintain" (if rates match competitors) or "rate_adjustment" (if change suggested)
+- price_range_min: the lower bound of the fuel price range
+- price_range_max: the upper bound of the fuel price range  
+- current_rate: UPS's current surcharge percentage (e.g., 19.0 for 19%)
+- suggested_rate: recommended rate (same as current if maintaining)
+- competitors: object with FedEx and DHL rates (null if no data)
+- reasoning: 30-50 word explanation
+- impact_analysis: object with revenue_impact, competitive_position, historical_context
+
+Return ONLY valid JSON in this format:
+{{
+  "recommendations": [
+    {{
+      "type": "maintain",
+      "price_range_min": 3.55,
+      "price_range_max": 3.64,
+      "current_rate": 20.0,
+      "suggested_rate": 20.0,
+      "competitors": {{"FedEx": 20.0, "DHL": null}},
+      "reasoning": "Rates match competitor FedEx exactly at 20%. Maintaining parity is strategically sound. Focus differentiation efforts on service quality rather than price.",
+      "impact_analysis": {{
+        "revenue_impact": "Neutral",
+        "competitive_position": "At parity with FedEx",
+        "historical_context": "Rates aligned with market"
+      }}
+    }}
+  ]
+}}
+
+Now generate 5-7 recommendations using the actual UPS data provided above:
+{{"""
+
+            response_text = await self._call_watsonx_with_retry(prompt, max_tokens=2500, temperature=0.4, retries=2)
+            parsed = parse_ai_json_response(response_text)
+            
+            if parsed and "recommendations" in parsed:
+                return {
+                    "recommendations": parsed["recommendations"],
+                    "metadata": {
+                        "market": market,
+                        "fuel_category": fuel_category,
+                        "carriers_analyzed": carriers_list,
+                        "generated_at": datetime.now().isoformat(),
+                        "_is_fallback": False
+                    }
+                }
+            
+            return {
+                "recommendations": [],
+                "metadata": {
+                    "market": market,
+                    "fuel_category": fuel_category,
+                    "note": "AI response could not be parsed",
+                    "_is_fallback": True
+                }
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Rate recommendations filtered error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "recommendations": [],
+                "metadata": {"note": f"Error: {str(e)}", "_is_fallback": True}
+            }
+    
+    async def chat_filtered(self, message: str, market: str, fuel_category: str, history: List[Dict] = None) -> str:
+        """Chat with filter context - data is specific to market/fuel_category."""
+        if not self.token_manager:
+            return "AI service is not configured. Please check your Watsonx credentials."
+        
+        try:
+            # Get filtered data
+            current_data = await self._get_fuel_curve_data(market, fuel_category)
+            currency = self._get_currency_info(market, fuel_category)
+            
+            # Build context
+            if current_data:
+                by_carrier: Dict[str, List[Dict]] = {}
+                for row in current_data:
+                    carrier = row['carrier']
+                    if carrier not in by_carrier:
+                        by_carrier[carrier] = []
+                    by_carrier[carrier].append({
+                        'range': f"{currency['symbol']}{row['at_least_usd']:.2f}-{currency['symbol']}{row['but_less_than_usd']:.2f}",
+                        'pct': row['surcharge_pct']
+                    })
+                
+                carriers_list = list(by_carrier.keys())
+                
+                context_data = f"DATA CONTEXT: {market} {fuel_category.replace('_', ' ')}\n"
+                context_data += f"Currency: {currency['symbol']} {currency['per_unit']}\n"
+                context_data += f"Carriers: {', '.join(carriers_list)}\n\n"
+                
+                for carrier, items in by_carrier.items():
+                    rates = [i['pct'] for i in items]
+                    context_data += f"{carrier}: {len(items)} ranges, avg {sum(rates)/len(rates):.2f}%, range {min(rates):.2f}-{max(rates):.2f}%\n"
+                    # Add sample data
+                    context_data += f"  Sample: {items[0]['range']} = {items[0]['pct']}%\n"
+            else:
+                context_data = f"No data available for {market} {fuel_category}"
+            
+            # Build conversation history
+            history = history or []
+            conversation = "\n".join([
+                f"{msg['role'].upper()}: {msg['content']}" for msg in history[-6:]
+            ])
+            
+            prompt = f"""You are a fuel surcharge pricing analyst. Answer questions about {market} {fuel_category.replace('_', ' ')} rates.
+
+{conversation}
+
+{context_data}
+
+USER QUESTION: {message}
+
+INSTRUCTIONS:
+- Use correct currency ({currency['symbol']}) and units ({currency['per_unit']})
+- Be concise and accurate with data
+- If rates are identical between carriers, note that clearly
+- Format numbers nicely (e.g., "18.5%" not "18.500%")
+
+ASSISTANT:"""
+
+            response = await self._call_watsonx(prompt, max_tokens=500, temperature=0.7)
+            return response.strip()
+            
+        except Exception as e:
+            print(f"⚠️ Chat filtered error: {e}")
+            return f"I encountered an error: {str(e)}. Please try rephrasing your question."
 
 
 # Global service instance

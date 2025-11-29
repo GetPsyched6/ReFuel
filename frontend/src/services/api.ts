@@ -139,15 +139,26 @@ export const historyApi = {
 		}),
 };
 
-// AI endpoints
+// AI endpoints - Filter-based (uses market + fuel_category, all carriers)
 export const aiApi = {
 	generateInsights: (sessionId?: number) =>
 		api.post("/ai/insights", { session_id: sessionId }),
 
 	getInsights: (sessionId: number) => api.get(`/ai/insights/${sessionId}`),
 
-	chat: (message: string, history: any[] = [], sessionId?: number) =>
-		api.post("/ai/chat", { message, history, session_id: sessionId }),
+	// Chat with filter context
+	chat: (
+		message: string,
+		history: any[] = [],
+		market?: string,
+		fuelCategory?: string
+	) =>
+		api.post("/ai/chat", {
+			message,
+			history,
+			market: market || "US",
+			fuel_category: fuelCategory || "ground_domestic",
+		}),
 
 	generateExecutiveAnalysis: (sessionId?: number) =>
 		api.post("/ai/executive-analysis", { session_id: sessionId }),
@@ -158,8 +169,45 @@ export const aiApi = {
 	generateRateRecommendations: (sessionId?: number) =>
 		api.post("/ai/rate-recommendations", { session_id: sessionId }),
 
-	getAllInsights: (sessionId?: number) =>
-		api.post("/ai/all-insights", { session_id: sessionId }),
+	// Main entry point - uses filter-based data with caching
+	getAllInsights: (
+		market?: string,
+		fuelCategory?: string,
+		forceRefresh: boolean = false
+	) =>
+		api.post("/ai/all-insights", {
+			market: market || "US",
+			fuel_category: fuelCategory || "ground_domestic",
+			force_refresh: forceRefresh,
+		}),
+
+	// Individual insight endpoints (for single tab refresh)
+	getQuickInsights: (market?: string, fuelCategory?: string, forceRefresh: boolean = false) =>
+		api.post("/ai/quick-insights-filtered", {
+			market: market || "US",
+			fuel_category: fuelCategory || "ground_domestic",
+			force_refresh: forceRefresh,
+		}),
+	getExecutiveAnalysis: (market?: string, fuelCategory?: string, forceRefresh: boolean = false) =>
+		api.post("/ai/executive-analysis-filtered", {
+			market: market || "US",
+			fuel_category: fuelCategory || "ground_domestic",
+			force_refresh: forceRefresh,
+		}),
+	getRateRecommendations: (market?: string, fuelCategory?: string, forceRefresh: boolean = false) =>
+		api.post("/ai/rate-recommendations-filtered", {
+			market: market || "US",
+			fuel_category: fuelCategory || "ground_domestic",
+			force_refresh: forceRefresh,
+		}),
+
+	// Cache invalidation
+	invalidateCache: (cacheKey: string) =>
+		api.post("/ai/invalidate-cache", null, {
+			params: { cache_key: cacheKey },
+		}),
+	invalidateAllCache: () =>
+		api.post("/ai/invalidate-cache", null, {}),
 };
 
 // Metadata endpoints

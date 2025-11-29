@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Send, Loader2 } from "lucide-react";
+import { X, Send, Loader2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { aiApi } from "@/services/api";
 import ReactMarkdown from "react-markdown";
@@ -10,17 +10,39 @@ interface Message {
 	content: string;
 }
 
-export default function Chatbot({ onClose }: { onClose: () => void }) {
+interface ChatbotProps {
+	onClose: () => void;
+	market?: string;
+	fuelCategory?: string;
+}
+
+export default function Chatbot({
+	onClose,
+	market = "US",
+	fuelCategory = "ground_domestic",
+}: ChatbotProps) {
+	const formatCategory = (cat: string) =>
+		cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
 	const [messages, setMessages] = useState<Message[]>([
 		{
 			role: "assistant",
-			content:
-				"Hi! I can help you analyze fuel surcharge data. What would you like to know?",
+			content: `Hi! I can help you analyze ${market} ${formatCategory(fuelCategory)} fuel surcharge data. What would you like to know?`,
 		},
 	]);
 	const [input, setInput] = useState("");
 	const [loading, setLoading] = useState(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
+
+	// Reset messages when filter changes
+	useEffect(() => {
+		setMessages([
+			{
+				role: "assistant",
+				content: `Hi! I can help you analyze ${market} ${formatCategory(fuelCategory)} fuel surcharge data. What would you like to know?`,
+			},
+		]);
+	}, [market, fuelCategory]);
 
 	const scrollToBottom = () => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,7 +61,7 @@ export default function Chatbot({ onClose }: { onClose: () => void }) {
 		setLoading(true);
 
 		try {
-			const response = await aiApi.chat(input, messages);
+			const response = await aiApi.chat(input, messages, market, fuelCategory);
 			setMessages((prev) => [
 				...prev,
 				{
@@ -77,8 +99,11 @@ export default function Chatbot({ onClose }: { onClose: () => void }) {
 			{/* Header */}
 			<div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gradient-ups text-white rounded-t-2xl">
 				<div>
-					<h3 className="font-semibold">UPS Surcharge Assistant</h3>
-					<p className="text-xs opacity-80">Ask about fuel surcharges</p>
+					<h3 className="font-semibold">Fuel Surcharge Assistant</h3>
+					<p className="text-xs opacity-80 flex items-center gap-1">
+						<MapPin className="w-3 h-3" />
+						{market} • {formatCategory(fuelCategory)}
+					</p>
 				</div>
 				<button
 					onClick={onClose}

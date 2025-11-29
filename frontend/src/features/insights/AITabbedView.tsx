@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
 	Zap,
@@ -9,6 +9,9 @@ import {
 	TrendingUp,
 	AlertTriangle,
 	BarChart3,
+	RefreshCw,
+	RefreshCcw,
+	Database,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -34,17 +37,13 @@ interface ExecutiveAnalysisResponse {
 }
 
 interface AITabbedViewProps {
-	sessionId?: number;
 	fuelCategory?: string;
 	market?: string;
-	carriers?: string[];
 }
 
 const AITabbedView: React.FC<AITabbedViewProps> = ({
-	sessionId,
 	fuelCategory,
 	market,
-	carriers,
 }) => {
 	const [quickInsights, setQuickInsights] = useState<any>(null);
 	const [executiveAnalysis, setExecutiveAnalysis] =
@@ -59,94 +58,178 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 	const [errorAnalysis, setErrorAnalysis] = useState<string>();
 	const [errorRecommendations, setErrorRecommendations] = useState<string>();
 
-	const [retryCount, setRetryCount] = useState(0);
-	const MAX_RETRIES = 3;
+	const [fromCache, setFromCache] = useState(false);
+	const [isRefreshingTab, setIsRefreshingTab] = useState<string | null>(null); // Which tab is refreshing
+	const [isRefreshingService, setIsRefreshingService] = useState(false);
+	const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
-	const loadAllInsights = useCallback(async () => {
-		// Reset states
-		setLoadingQuick(true);
-		setLoadingAnalysis(true);
-		setLoadingRecommendations(true);
-		setErrorQuick(undefined);
-		setErrorAnalysis(undefined);
-		setErrorRecommendations(undefined);
+	// Track last loaded filter to detect changes
+	const lastFilterRef = useRef<string>("");
+	const isInitialLoad = useRef(true);
 
-		try {
-			// Call the parallel endpoint
-			const response = await aiApi.getAllInsights(sessionId);
-			const data = response.data;
+	const loadAllInsights = useCallback(
+		async (forceRefresh: boolean = false) => {
+			const currentFilter = `${market}_${fuelCategory}`;
+			const filterChanged = lastFilterRef.current !== currentFilter;
+			
+			// Update the ref
+			lastFilterRef.current = currentFilter;
 
-			// Quick Insights
-			if (data.quick_insights?.error) {
-				setErrorQuick(data.quick_insights.error);
-			} else {
-				setQuickInsights(data.quick_insights);
+			// If filter changed, CLEAR old data immediately to prevent showing stale data
+			if (filterChanged) {
+				setQuickInsights(null);
+				setExecutiveAnalysis(null);
+				setRecommendations(null);
+				setFromCache(false);
 			}
-			setLoadingQuick(false);
 
-			// Executive Analysis - with retry logic for fallback data
-			if (data.executive_analysis?.error) {
-				setErrorAnalysis(data.executive_analysis.error);
+			// Set loading states
+			setLoadingQuick(true);
+			setLoadingAnalysis(true);
+			setLoadingRecommendations(true);
+			setErrorQuick(undefined);
+			setErrorAnalysis(undefined);
+			setErrorRecommendations(undefined);
+
+			try {
+				// DON'T force refresh just because filter changed - let backend check its cache
+				const response = await aiApi.getAllInsights(
+					market || "US",
+					fuelCategory || "ground_domestic",
+					forceRefresh
+				);
+				const data = response.data;
+
+				// Verify we're still on the same filter (prevent race condition)
+				if (`${market}_${fuelCategory}` !== lastFilterRef.current) {
+					console.log("Filter changed during load, ignoring stale response");
+					return;
+				}
+
+				// Track if from cache
+				setFromCache(data.from_cache === true);
+
+				// Quick Insights
+				if (data.quick_insights?.error) {
+					setErrorQuick(data.quick_insights.error);
+				} else {
+					setQuickInsights(data.quick_insights);
+				}
+				setLoadingQuick(false);
+
+				// Executive Analysis
+				if (data.executive_analysis?.error) {
+					setErrorAnalysis(data.executive_analysis.error);
+				} else {
+					setExecutiveAnalysis(data.executive_analysis);
+				}
 				setLoadingAnalysis(false);
-			} else if (
-				data.executive_analysis?.metadata?.note?.includes("Fallback") &&
-				retryCount < MAX_RETRIES
-			) {
-				// Fallback detected, retry after delay
-				setTimeout(() => {
-					setRetryCount((prev) => prev + 1);
-					retryExecutiveAnalysis();
-				}, 2000);
-			} else {
-				setExecutiveAnalysis(data.executive_analysis);
-				setLoadingAnalysis(false);
-			}
 
-			// Rate Recommendations
-			if (data.recommendations?.error) {
-				setErrorRecommendations(data.recommendations.error);
-			} else {
-				setRecommendations(data.recommendations);
+				// Rate Recommendations
+				if (data.recommendations?.error) {
+					setErrorRecommendations(data.recommendations.error);
+				} else {
+					setRecommendations(data.recommendations);
+				}
+				setLoadingRecommendations(false);
+			} catch (error: any) {
+				console.error("Failed to load AI insights:", error);
+				setErrorQuick("Failed to load insights");
+				setErrorAnalysis("Failed to load analysis");
+				setErrorRecommendations("Failed to load recommendations");
+				setLoadingQuick(false);
+				setLoadingAnalysis(false);
+				setLoadingRecommendations(false);
+			} finally {
+				setIsRefreshingTab(null);
+				setIsRefreshingService(false);
+				setIsRefreshingAll(false);
+				isInitialLoad.current = false;
 			}
-			setLoadingRecommendations(false);
-		} catch (error: any) {
-			console.error("Failed to load AI insights:", error);
-			setErrorQuick("Failed to load insights");
-			setErrorAnalysis("Failed to load analysis");
-			setErrorRecommendations("Failed to load recommendations");
-			setLoadingQuick(false);
-			setLoadingAnalysis(false);
-			setLoadingRecommendations(false);
-		}
-	}, [sessionId]);
+		},
+		[market, fuelCategory]
+	);
 
 	useEffect(() => {
-		if (sessionId) {
-			loadAllInsights();
-		}
-	}, [sessionId, loadAllInsights]);
+		loadAllInsights(false);
+	}, [loadAllInsights]);
 
-	const retryExecutiveAnalysis = async () => {
+	// Refresh only the current tab - calls individual endpoint with force_refresh
+	const handleRefreshCurrentTab = async () => {
+		setIsRefreshingTab(activeTab);
+		
 		try {
-			const response = await aiApi.generateExecutiveAnalysis(sessionId);
-			const data = response.data;
-
-			if (
-				data?.metadata?.note?.includes("Fallback") &&
-				retryCount < MAX_RETRIES
-			) {
-				// Still fallback, retry again
-				setTimeout(() => {
-					setRetryCount((prev) => prev + 1);
-					retryExecutiveAnalysis();
-				}, 2000);
-			} else {
-				setExecutiveAnalysis(data);
+			if (activeTab === "insights") {
+				setLoadingQuick(true);
+				setErrorQuick(undefined);
+				const response = await aiApi.getQuickInsights(market, fuelCategory, true); // force refresh
+				if (response.data.quick_insights?.error) {
+					setErrorQuick(response.data.quick_insights.error);
+				} else {
+					setQuickInsights(response.data.quick_insights);
+				}
+				setLoadingQuick(false);
+			} else if (activeTab === "analysis") {
+				setLoadingAnalysis(true);
+				setErrorAnalysis(undefined);
+				const response = await aiApi.getExecutiveAnalysis(market, fuelCategory, true); // force refresh
+				if (response.data.executive_analysis?.error) {
+					setErrorAnalysis(response.data.executive_analysis.error);
+				} else {
+					setExecutiveAnalysis(response.data.executive_analysis);
+				}
 				setLoadingAnalysis(false);
+			} else if (activeTab === "recommendations") {
+				setLoadingRecommendations(true);
+				setErrorRecommendations(undefined);
+				const response = await aiApi.getRateRecommendations(market, fuelCategory, true); // force refresh
+				if (response.data.recommendations?.error) {
+					setErrorRecommendations(response.data.recommendations.error);
+				} else {
+					setRecommendations(response.data.recommendations);
+				}
+				setLoadingRecommendations(false);
 			}
+			setFromCache(false); // Just refreshed, so not from cache
+		} catch (error: any) {
+			console.error("Failed to refresh tab:", error);
+			if (activeTab === "insights") {
+				setErrorQuick("Failed to refresh");
+				setLoadingQuick(false);
+			} else if (activeTab === "analysis") {
+				setErrorAnalysis("Failed to refresh");
+				setLoadingAnalysis(false);
+			} else {
+				setErrorRecommendations("Failed to refresh");
+				setLoadingRecommendations(false);
+			}
+		} finally {
+			setIsRefreshingTab(null);
+		}
+	};
+
+	// Refresh all 3 tabs for current service/filter
+	const handleRefreshService = async () => {
+		setIsRefreshingService(true);
+		const cacheKey = `${market || "US"}_${fuelCategory || "ground_domestic"}`;
+		try {
+			await aiApi.invalidateCache(cacheKey);
+			await loadAllInsights(true);
 		} catch (error) {
-			setErrorAnalysis("Analysis unavailable");
-			setLoadingAnalysis(false);
+			console.error("Failed to refresh service:", error);
+			setIsRefreshingService(false);
+		}
+	};
+
+	// Refresh all AI data across ALL filters/services
+	const handleRefreshAll = async () => {
+		setIsRefreshingAll(true);
+		try {
+			await aiApi.invalidateAllCache();
+			await loadAllInsights(true);
+		} catch (error) {
+			console.error("Failed to invalidate all cache:", error);
+			setIsRefreshingAll(false);
 		}
 	};
 
@@ -185,19 +268,16 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 		},
 	];
 
-	// Get filter context for display
+	// Get filter context for display (carriers filter is ignored - we always use all carriers)
 	const getFilterSummary = () => {
 		const parts: string[] = [];
 		if (market && market !== "US") parts.push(`Market: ${market}`);
-		if (fuelCategory && fuelCategory !== "all") {
+		if (fuelCategory && fuelCategory !== "all" && fuelCategory !== "ground_domestic") {
 			const categoryLabel = fuelCategory
 				.split("_")
 				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 				.join(" ");
 			parts.push(`Service: ${categoryLabel}`);
-		}
-		if (carriers && carriers.length > 0 && carriers.length < 3) {
-			parts.push(`Carriers: ${carriers.join(", ")}`);
 		}
 		return parts.length > 0 ? parts.join(" • ") : null;
 	};
@@ -207,17 +287,90 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 	return (
 		<Card glass className="p-6">
 			<div className="mb-6">
-				<h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
-					AI Competitive Intelligence
-				</h2>
-				<p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-					AI-powered insights and recommendations
-					{filterSummary && (
-						<span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">
-							{filterSummary}
-						</span>
-					)}
-				</p>
+				<div className="flex items-start justify-between">
+					<div>
+						<h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
+							AI Competitive Intelligence
+						</h2>
+						<p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+							AI-powered insights and recommendations
+							{filterSummary && (
+								<span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">
+									{filterSummary}
+								</span>
+							)}
+							{fromCache && (
+								<span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-medium inline-flex items-center gap-1">
+									<Database className="w-3 h-3" />
+									Cached
+								</span>
+							)}
+						</p>
+					</div>
+
+					{/* Refresh Buttons */}
+					<div className="flex items-center gap-1.5">
+						{/* Refresh current tab only */}
+						<Tooltip content={`Refresh ${activeTab === 'insights' ? 'Quick Insights' : activeTab === 'analysis' ? 'Executive Analysis' : 'Rate Recommendations'}`}>
+							<motion.button
+								whileHover={{ scale: 1.05 }}
+								whileTap={{ scale: 0.95 }}
+								onClick={handleRefreshCurrentTab}
+								disabled={!!isRefreshingTab || isRefreshingService || isRefreshingAll}
+								className="px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+							>
+								<RefreshCw
+									className={`w-3.5 h-3.5 text-gray-600 dark:text-gray-400 ${
+										isRefreshingTab ? "animate-spin" : ""
+									}`}
+								/>
+								<span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+									Tab
+								</span>
+							</motion.button>
+						</Tooltip>
+						
+						{/* Refresh all 3 tabs for current service */}
+						<Tooltip content={`Refresh all tabs for ${fuelCategory?.replace(/_/g, ' ') || 'current service'}`}>
+							<motion.button
+								whileHover={{ scale: 1.05 }}
+								whileTap={{ scale: 0.95 }}
+								onClick={handleRefreshService}
+								disabled={!!isRefreshingTab || isRefreshingService || isRefreshingAll}
+								className="px-2.5 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+							>
+								<RefreshCw
+									className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${
+										isRefreshingService ? "animate-spin" : ""
+									}`}
+								/>
+								<span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+									Service
+								</span>
+							</motion.button>
+						</Tooltip>
+						
+						{/* Clear ALL cached AI data */}
+						<Tooltip content="Clear all cached AI data across all services">
+							<motion.button
+								whileHover={{ scale: 1.05 }}
+								whileTap={{ scale: 0.95 }}
+								onClick={handleRefreshAll}
+								disabled={!!isRefreshingTab || isRefreshingService || isRefreshingAll}
+								className="px-2.5 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+							>
+								<RefreshCcw
+									className={`w-3.5 h-3.5 text-purple-600 dark:text-purple-400 ${
+										isRefreshingAll ? "animate-spin" : ""
+									}`}
+								/>
+								<span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+									All
+								</span>
+							</motion.button>
+						</Tooltip>
+					</div>
+				</div>
 			</div>
 
 			<Tabs.Root value={activeTab} onValueChange={setActiveTab}>

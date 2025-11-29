@@ -114,6 +114,7 @@ export default function FuelCurveVersionComparison({
 	const [curveData, setCurveData] = useState<Record<number, Band[]>>({});
 	const [loadingCurves, setLoadingCurves] = useState(false);
 	const [showAllRateShifts, setShowAllRateShifts] = useState(false);
+	const [showAllRateComparisons, setShowAllRateComparisons] = useState(false);
 
 	// Get default price for this market/category
 	const defaultPrice =
@@ -1947,7 +1948,12 @@ export default function FuelCurveVersionComparison({
 					)}
 
 					{/* Price Point Comparison - Horizontal Bars */}
-					{lollipopData.length > 0 && (
+					{lollipopData.length > 0 && (() => {
+						const filteredData = lollipopData.filter((d) => d.hasBoth);
+						const displayData = showAllRateComparisons ? filteredData : filteredData.slice(0, 5);
+						const hiddenCount = filteredData.length - 5;
+						
+						return (
 						<div className="p-5 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 shadow-sm">
 							<div className="flex items-center justify-between mb-5">
 								<div className="flex items-center gap-2">
@@ -1960,12 +1966,9 @@ export default function FuelCurveVersionComparison({
 
 							{/* Custom horizontal bars with better design */}
 							<div className="space-y-3">
-								{lollipopData
-									.filter((d) => d.hasBoth)
-									.map((item, idx) => {
+								{displayData.map((item, idx) => {
 										const maxVal = Math.max(
-											...lollipopData
-												.filter((d) => d.hasBoth)
+											...filteredData
 												.flatMap((d) => [d.previous || 0, d.current || 0])
 										);
 										const prevWidth = ((item.previous || 0) / maxVal) * 100;
@@ -2045,6 +2048,16 @@ export default function FuelCurveVersionComparison({
 									})}
 							</div>
 
+							{/* Show more button */}
+							{hiddenCount > 0 && (
+								<button
+									onClick={() => setShowAllRateComparisons(!showAllRateComparisons)}
+									className="w-full mt-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/30 rounded-lg transition-colors"
+								>
+									{showAllRateComparisons ? "Show less" : `Show ${hiddenCount} more...`}
+								</button>
+							)}
+
 							{/* Legend */}
 							<div className="flex items-center justify-center gap-6 mt-5 pt-4 border-t border-slate-100 dark:border-slate-700">
 								<span className="flex items-center gap-2 text-xs text-slate-500">
@@ -2057,7 +2070,8 @@ export default function FuelCurveVersionComparison({
 								</span>
 							</div>
 						</div>
-					)}
+					);
+					})()}
 				</div>
 			)}
 		</Card>

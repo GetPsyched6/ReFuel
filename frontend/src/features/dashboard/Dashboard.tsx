@@ -514,10 +514,8 @@ export default function Dashboard() {
 						hidden={primaryTab !== "ai"}
 					>
 						<AITabbedView
-							sessionId={currentSessionId || undefined}
 							fuelCategory={selectedServiceType}
 							market={selectedCountry}
-							carriers={selectedCarriers}
 						/>
 					</Tabs.Content>
 				</Tabs.Root>
@@ -540,7 +538,13 @@ export default function Dashboard() {
 				</motion.div>
 
 				<AnimatePresence>
-					{showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
+					{showChatbot && (
+						<Chatbot
+							onClose={() => setShowChatbot(false)}
+							market={selectedCountry}
+							fuelCategory={selectedServiceType}
+						/>
+					)}
 				</AnimatePresence>
 			</div>
 		</Layout>

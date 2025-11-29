@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ReFuel - Quick Start Script
+# Fuel Surcharge PoC - Quick Start Script
 # Starts all services needed for the POC
 
 # Colors for output
