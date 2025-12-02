@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Card } from "@/components/ui/Card";
 import { historyApi } from "@/services/api";
 import {
@@ -34,63 +34,92 @@ export default function HistoricalTrends({
 	const [loading, setLoading] = useState(true);
 	const [chartOrTable, setChartOrTable] = useState<"chart" | "table">("chart");
 	const [yAxisMode, setYAxisMode] = useState<"auto" | "fixed">("auto");
+	
+	// Ref for abort controller
+	const abortControllerRef = useRef<AbortController | null>(null);
+	
+	// Stabilize carriers to prevent unnecessary reloads
+	const carriersKey = useMemo(() => carriers?.slice().sort().join(",") || "", [carriers]);
 
 	useEffect(() => {
-		loadTrends();
-	}, [carriers, fuelCategory, market, startDate, endDate]);
-
-	const loadTrends = async () => {
-		setLoading(true);
-		try {
-			// Build API call parameters
-			const apiCarriers =
-				carriers && carriers.length > 0 ? carriers : undefined;
-			const apiFuelCategory =
-				fuelCategory && fuelCategory !== "all" ? fuelCategory : undefined;
-			const apiMarket = market || undefined;
-			const apiDays = startDate && endDate ? undefined : undefined;
-			const apiStartDate = startDate || undefined;
-			const apiEndDate = endDate || undefined;
-
-			const response = await historyApi.getTrends(
-				apiCarriers,
-				apiDays,
-				apiFuelCategory,
-				apiMarket,
-				apiStartDate,
-				apiEndDate
-			);
-
-			// Axios wraps the response, so data is in response.data
-			const apiData = response.data;
-			const trendsData = apiData?.trends || [];
-
-			if (!trendsData || trendsData.length === 0) {
-				setTrends([]);
-				setLoading(false);
-				return;
-			}
-
-			// Group by date
-			const trendsByDate: any = {};
-			trendsData.forEach((trend: any) => {
-				if (!trendsByDate[trend.date]) {
-					trendsByDate[trend.date] = { date: trend.date };
-				}
-				trendsByDate[trend.date][trend.carrier] = parseFloat(
-					trend.avg_surcharge
-				);
-			});
-
-			const sortedTrends = Object.values(trendsByDate).reverse();
-			setTrends(sortedTrends);
-		} catch (error: any) {
-			console.error("Failed to load trends:", error);
-			setTrends([]);
-		} finally {
-			setLoading(false);
+		// Cancel previous request
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
 		}
-	};
+		
+		const abortController = new AbortController();
+		abortControllerRef.current = abortController;
+		
+		const loadTrends = async () => {
+			setLoading(true);
+			try {
+				// Build API call parameters
+				const apiCarriers =
+					carriers && carriers.length > 0 ? carriers : undefined;
+				const apiFuelCategory =
+					fuelCategory && fuelCategory !== "all" ? fuelCategory : undefined;
+				const apiMarket = market || undefined;
+				const apiDays = startDate && endDate ? undefined : undefined;
+				const apiStartDate = startDate || undefined;
+				const apiEndDate = endDate || undefined;
+
+				const response = await historyApi.getTrends(
+					apiCarriers,
+					apiDays,
+					apiFuelCategory,
+					apiMarket,
+					apiStartDate,
+					apiEndDate
+				);
+
+				// Only update state if not aborted
+				if (abortController.signal.aborted) return;
+
+				// Axios wraps the response, so data is in response.data
+				const apiData = response.data;
+				const trendsData = apiData?.trends || [];
+
+				if (!trendsData || trendsData.length === 0) {
+					setTrends([]);
+					setLoading(false);
+					return;
+				}
+
+				// Group by date
+				const trendsByDate: any = {};
+				trendsData.forEach((trend: any) => {
+					if (!trendsByDate[trend.date]) {
+						trendsByDate[trend.date] = { date: trend.date };
+					}
+					trendsByDate[trend.date][trend.carrier] = parseFloat(
+						trend.avg_surcharge
+					);
+				});
+
+				const sortedTrends = Object.values(trendsByDate).reverse();
+				setTrends(sortedTrends);
+			} catch (error: any) {
+				// Ignore abort errors
+				if (error?.name === "AbortError" || error?.code === "ERR_CANCELED") {
+					return;
+				}
+				if (abortController.signal.aborted) return;
+				
+				console.error("Failed to load trends:", error);
+				setTrends([]);
+			} finally {
+				if (!abortController.signal.aborted) {
+					setLoading(false);
+				}
+			}
+		};
+		
+		loadTrends();
+		
+		return () => {
+			abortController.abort();
+		};
+	}, [carriersKey, fuelCategory, market, startDate, endDate]); // Use carriersKey instead of carriers
 
 	// Determine which carriers actually have data
 	const carriersWithData = useMemo(() => {

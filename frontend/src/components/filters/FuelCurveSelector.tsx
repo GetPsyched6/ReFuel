@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, Check, GitBranch } from "lucide-react";
@@ -14,6 +14,7 @@ interface FuelCurveVersion {
 	effective_date: string;
 	label: string;
 	is_active: boolean;
+	has_exact_date: boolean;
 }
 
 export interface SelectedCurve {
@@ -50,17 +51,22 @@ function formatCurveLabel(version: FuelCurveVersion): string {
 		"Dec",
 	];
 	const month = monthNames[date.getMonth()];
+	const day = date.getDate();
 	const year = date.getFullYear();
+	
+	// Format date based on precision
+	const hasExactDate = version.has_exact_date ?? true;
+	const dateStr = hasExactDate ? `${month} ${day}, ${year}` : `${month} ${year}`;
 
-	// Use label if it's descriptive, otherwise generate from date
+	// Use label if it's descriptive (starts with "Pre"), otherwise generate from date
 	if (version.is_active) {
-		return `Current (${month} ${year})`;
+		return `Current (${dateStr})`;
 	} else {
-		// Historical curve - use the label or generate one
-		if (version.label && !version.label.startsWith("Fuel curve")) {
+		// Historical curve - use the label if it's a "Pre" label, otherwise generate
+		if (version.label && version.label.startsWith("Pre")) {
 			return version.label;
 		}
-		return `Historical (${month} ${year})`;
+		return `Historical (${dateStr})`;
 	}
 }
 
@@ -76,6 +82,12 @@ export default function FuelCurveSelector({
 		new Map()
 	);
 	const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
+	
+	// Refs for cancellation
+	const abortControllerRef = useRef<AbortController | null>(null);
+	
+	// Stabilize carriers to prevent unnecessary fetches
+	const carriersKey = useMemo(() => carriers.slice().sort().join(","), [carriers]);
 
 	// Notify parent when selection changes
 	useEffect(() => {
@@ -101,6 +113,16 @@ export default function FuelCurveSelector({
 
 	// Fetch available curve versions when filters change
 	useEffect(() => {
+		if (carriers.length === 0) return;
+		
+		// Cancel previous request
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
+		}
+		
+		const abortController = new AbortController();
+		abortControllerRef.current = abortController;
+		
 		const fetchCurveVersions = async () => {
 			try {
 				const params = new URLSearchParams({
@@ -109,8 +131,12 @@ export default function FuelCurveSelector({
 					carriers: carriers.join(","),
 				});
 				const response = await fetch(
-					`/api/fuel-curves/versions?${params.toString()}`
+					`/api/fuel-curves/versions?${params.toString()}`,
+					{ signal: abortController.signal }
 				);
+				
+				if (abortController.signal.aborted) return;
+				
 				if (response.ok) {
 					const data = await response.json();
 					const allVersions: FuelCurveVersion[] = data.versions || [];
@@ -132,15 +158,18 @@ export default function FuelCurveSelector({
 					}
 					setSelectedCurves(initialSelection);
 				}
-			} catch (error) {
+			} catch (error: any) {
+				if (error?.name === "AbortError") return;
 				console.error("Failed to fetch curve versions:", error);
 			}
 		};
 
-		if (carriers.length > 0) {
-			fetchCurveVersions();
-		}
-	}, [carriers, market, fuelCategory]);
+		fetchCurveVersions();
+		
+		return () => {
+			abortController.abort();
+		};
+	}, [carriersKey, market, fuelCategory]); // Use carriersKey instead of carriers
 
 	// Group versions by carrier
 	const versionsByCarrier = useMemo(() => {

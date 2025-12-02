@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Card } from "@/components/ui/Card";
 import { comparisonApi } from "@/services/api";
 import { Loader2, BarChart3, Table as TableIcon, TrendingUp } from "lucide-react";
@@ -60,79 +60,132 @@ export default function ComparisonTable({
 	const [chartOrTable, setChartOrTable] = useState<"chart" | "table">("chart");
 	const [showExtrapolation, setShowExtrapolation] = useState(false);
 
+	// Ref to track the current request and cancel stale ones
+	const abortControllerRef = useRef<AbortController | null>(null);
+	
+	// Stabilize carriers to prevent unnecessary reloads when array reference changes
+	const carriersKey = useMemo(() => carriers?.slice().sort().join(",") || "", [carriers]);
+
 	// Identify which curves are "additional" (not active, need separate fetching)
 	const additionalCurves = useMemo(() => {
 		if (!selectedCurves) return [];
 		return selectedCurves.filter((c) => !c.isActive);
 	}, [selectedCurves]);
 
-	const loadRawData = useCallback(async () => {
+	// Load data - using stable dependencies
+	useEffect(() => {
 		if (!sessionId || !fuelCategory || !market) {
 			setRawData([]);
 			setLoading(false);
 			return;
 		}
 
-		setLoading(true);
-		try {
-			const response = await comparisonApi.getComparison(
-				"raw",
-				sessionId,
-				false,
-				fuelCategory,
-				market,
-				carriers
-			);
-			setRawData(response.data.rows || []);
-		} catch (error) {
-			console.error("Failed to load raw data:", error);
-			setRawData([]);
-		} finally {
-			setLoading(false);
+		// Cancel any previous request
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
 		}
-	}, [sessionId, fuelCategory, market, carriers]);
+		
+		const abortController = new AbortController();
+		abortControllerRef.current = abortController;
 
-	// Load data
-	useEffect(() => {
-		if (sessionId) {
-			loadRawData();
-		}
-	}, [sessionId, loadRawData]);
-
-	// Fetch additional (historical) curve data when selected
-	useEffect(() => {
-		const fetchAdditionalCurves = async () => {
-			if (additionalCurves.length === 0) {
-				setAdditionalCurveData(new Map());
-				return;
-			}
-
-			const newData = new Map<number, any[]>();
-			
-			for (const curve of additionalCurves) {
-				try {
-					// Use the multi-curve API to fetch just this one curve's data
-					const curveIds = curve.id.toString();
-					const response = await fetch(
-						`/api/comparison/compare?curve_version_ids=${curveIds}&view=raw`
-					);
-					if (response.ok) {
-						const data = await response.json();
-						// The response has curves array, each with rows
-						if (data.curves && data.curves.length > 0) {
-							newData.set(curve.id, data.curves[0].rows || []);
-							console.log(`📈 Loaded ${data.curves[0].rows?.length || 0} rows for curve ${curve.id} (${curve.label})`);
-						}
+		const loadRawData = async () => {
+			setLoading(true);
+			try {
+				const response = await comparisonApi.getComparison(
+					"raw",
+					sessionId,
+					false,
+					fuelCategory,
+					market,
+					carriers
+				);
+				
+				// Only update state if this request wasn't cancelled
+				if (!abortController.signal.aborted) {
+					setRawData(response.data.rows || []);
+				}
+			} catch (error: any) {
+				// Ignore abort errors
+				if (error?.name !== "AbortError" && error?.code !== "ERR_CANCELED") {
+					console.error("Failed to load raw data:", error);
+					if (!abortController.signal.aborted) {
+						setRawData([]);
 					}
-				} catch (error) {
-					console.error(`Failed to load curve ${curve.id}:`, error);
+				}
+			} finally {
+				if (!abortController.signal.aborted) {
+					setLoading(false);
 				}
 			}
+		};
+
+		loadRawData();
+		
+		return () => {
+			abortController.abort();
+		};
+	}, [sessionId, fuelCategory, market, carriersKey]); // Use carriersKey instead of carriers
+
+	// Ref for additional curves abort controller
+	const additionalCurvesAbortRef = useRef<AbortController | null>(null);
+	
+	// Fetch additional (historical) curve data when selected
+	useEffect(() => {
+		if (additionalCurves.length === 0) {
+			setAdditionalCurveData(new Map());
+			return;
+		}
+
+		// Cancel previous additional curves fetch
+		if (additionalCurvesAbortRef.current) {
+			additionalCurvesAbortRef.current.abort();
+		}
+		
+		const abortController = new AbortController();
+		additionalCurvesAbortRef.current = abortController;
+
+		const fetchAdditionalCurves = async () => {
+			const newData = new Map<number, any[]>();
 			
-			setAdditionalCurveData(newData);
+			// Fetch all curves in parallel instead of sequentially
+			const fetchPromises = additionalCurves.map(async (curve) => {
+				try {
+					const curveIds = curve.id.toString();
+					const response = await fetch(
+						`/api/comparison/compare?curve_version_ids=${curveIds}&view=raw`,
+						{ signal: abortController.signal }
+					);
+					if (response.ok && !abortController.signal.aborted) {
+						const data = await response.json();
+						if (data.curves && data.curves.length > 0) {
+							return { id: curve.id, rows: data.curves[0].rows || [], label: curve.label };
+						}
+					}
+				} catch (error: any) {
+					if (error?.name !== "AbortError") {
+						console.error(`Failed to load curve ${curve.id}:`, error);
+					}
+				}
+				return null;
+			});
+
+			const results = await Promise.all(fetchPromises);
+			
+			if (!abortController.signal.aborted) {
+				results.forEach((result) => {
+					if (result) {
+						newData.set(result.id, result.rows);
+					}
+				});
+				setAdditionalCurveData(newData);
+			}
 		};
 
 		fetchAdditionalCurves();
+		
+		return () => {
+			abortController.abort();
+		};
 	}, [additionalCurves]);
 
 	// STEP 1: Merge raw + additional curves + extrapolated data

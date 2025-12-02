@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
 	TrendingUp,
 	TrendingDown,
@@ -25,6 +25,7 @@ import OutlierScatter from "./OutlierScatter";
 import CadenceHeatmap from "./CadenceHeatmap";
 import RelativeSurchargeIndex from "./RelativeSurchargeIndex";
 import FuelCurveVersionComparison from "./FuelCurveVersionComparison";
+import CarrierUpdateTimeline from "./CarrierUpdateTimeline";
 import { getCarrierBrandColor } from "@/theme/carriers";
 
 interface OverviewContentProps {
@@ -122,36 +123,62 @@ export default function OverviewContent({
 		new Set()
 	);
 
+	// Ref for abort controller
+	const abortControllerRef = useRef<AbortController | null>(null);
+
 	useEffect(() => {
-		loadOverviewData();
-	}, [selectedCountry, selectedServiceType]);
-
-	const loadOverviewData = async () => {
-		setLoading(true);
-		setError(null);
-
-		try {
-			const response = await overviewApi.getAnalytics(
-				selectedCountry,
-				selectedServiceType,
-				2.0
-			);
-
-			if (response.data.success) {
-				const overviewData = response.data.data;
-				setData(overviewData);
-				// Initialize all carriers as visible
-				setVisibleCarriers(new Set(overviewData.carriers));
-			} else {
-				setError("Failed to load overview data");
-			}
-		} catch (err: any) {
-			console.error("Error loading overview:", err);
-			setError(err.response?.data?.detail || "Failed to load overview data");
-		} finally {
-			setLoading(false);
+		// Cancel previous request
+		if (abortControllerRef.current) {
+			abortControllerRef.current.abort();
 		}
-	};
+
+		const abortController = new AbortController();
+		abortControllerRef.current = abortController;
+
+		const loadOverviewData = async () => {
+			setLoading(true);
+			setError(null);
+
+			try {
+				const response = await overviewApi.getAnalytics(
+					selectedCountry,
+					selectedServiceType,
+					2.0
+				);
+
+				// Only update state if not aborted
+				if (abortController.signal.aborted) return;
+
+				if (response.data.success) {
+					const overviewData = response.data.data;
+					setData(overviewData);
+					// Initialize all carriers as visible
+					setVisibleCarriers(new Set(overviewData.carriers));
+				} else {
+					setError("Failed to load overview data");
+				}
+			} catch (err: any) {
+				// Ignore abort errors
+				if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") {
+					return;
+				}
+				if (abortController.signal.aborted) return;
+
+				console.error("Error loading overview:", err);
+				setError(err.response?.data?.detail || "Failed to load overview data");
+			} finally {
+				if (!abortController.signal.aborted) {
+					setLoading(false);
+				}
+			}
+		};
+
+		loadOverviewData();
+
+		return () => {
+			abortController.abort();
+		};
+	}, [selectedCountry, selectedServiceType]);
 
 	const toggleCarrier = (carrier: string) => {
 		setVisibleCarriers((prev) => {
@@ -405,6 +432,12 @@ export default function OverviewContent({
 					</div>
 				)}
 			</Card>
+
+			{/* Carrier Update Timeline */}
+			<CarrierUpdateTimeline
+				market={selectedCountry}
+				fuelCategory={selectedServiceType}
+			/>
 
 			{/* Recent Movement */}
 			<Card glass>

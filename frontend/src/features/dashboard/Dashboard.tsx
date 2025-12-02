@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { historyApi, metadataApi } from "@/services/api";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import FuelCurveSelector, { SelectedCurve } from "@/components/filters/FuelCurveSelector";
+import FuelSourcesCard from "@/components/info/FuelSourcesCard";
 import * as Tabs from "@radix-ui/react-tabs";
 
 interface Session {
@@ -389,26 +390,16 @@ export default function Dashboard() {
 						</Tabs.Trigger>
 					</Tabs.List>
 
-					{/* Overview Tab */}
-					<Tabs.Content
-						value="overview"
-						className="space-y-6"
-						forceMount
-						hidden={primaryTab !== "overview"}
-					>
-						<OverviewContent
-							selectedCountry={selectedCountry}
-							selectedServiceType={selectedServiceType}
-						/>
-					</Tabs.Content>
+				{/* Overview Tab */}
+				<Tabs.Content value="overview" className="space-y-6">
+					<OverviewContent
+						selectedCountry={selectedCountry}
+						selectedServiceType={selectedServiceType}
+					/>
+				</Tabs.Content>
 
-					{/* Charts & Tables Tab with Sub-tabs */}
-					<Tabs.Content
-						value="charts"
-						className="space-y-6"
-						forceMount
-						hidden={primaryTab !== "charts"}
-					>
+				{/* Charts & Tables Tab with Sub-tabs */}
+				<Tabs.Content value="charts" className="space-y-6">
 						<Tabs.Root
 							value={chartsSubTab}
 							onValueChange={setChartsSubTab}
@@ -474,6 +465,13 @@ export default function Dashboard() {
 									</motion.div>
 								)}
 
+								{/* Fuel Sources Info */}
+								<FuelSourcesCard
+									market={selectedCountry}
+									fuelCategory={selectedServiceType}
+									carriers={selectedCarriers}
+								/>
+
 								{/* Comparison Table */}
 								<ComparisonTable
 									view={activeView}
@@ -506,18 +504,13 @@ export default function Dashboard() {
 						</Tabs.Root>
 					</Tabs.Content>
 
-					{/* AI Tab */}
-					<Tabs.Content
-						value="ai"
-						className="space-y-6"
-						forceMount
-						hidden={primaryTab !== "ai"}
-					>
-						<AITabbedView
-							fuelCategory={selectedServiceType}
-							market={selectedCountry}
-						/>
-					</Tabs.Content>
+				{/* AI Tab */}
+				<Tabs.Content value="ai" className="space-y-6">
+					<AITabbedView
+						fuelCategory={selectedServiceType}
+						market={selectedCountry}
+					/>
+				</Tabs.Content>
 				</Tabs.Root>
 
 				<ScrapeNow onSuccess={loadSessions} />

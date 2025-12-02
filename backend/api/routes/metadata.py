@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from models.database import Database, get_db
-from config import INFLECTION_SKIP_LIST
+from config import INFLECTION_SKIP_LIST, UNIT_CONVERSIONS
 
 router = APIRouter()
 
@@ -82,4 +82,38 @@ async def get_inflection_skip_list():
         for market, carrier, fuel_category in INFLECTION_SKIP_LIST
     ]
     return {"skip_list": skip_list}
+
+
+@router.get("/fuel-sources", summary="Get fuel pricing sources for all active curves")
+async def get_fuel_sources(db: Database = Depends(get_db)):
+    """
+    Returns the fuel pricing source/index for each active curve.
+    Used to display transparency info about what fuel prices each carrier references.
+    """
+    query = """
+        SELECT 
+            id, carrier, market, fuel_category, fuel_type, service
+        FROM fuel_curve_versions 
+        WHERE is_active = 1
+        ORDER BY market, fuel_category, carrier
+    """
+    results = await db.execute_query(query)
+    
+    sources = []
+    for row in results:
+        key = (row['market'], row['carrier'], row['fuel_category'])
+        conversion_info = UNIT_CONVERSIONS.get(key)
+        
+        sources.append({
+            "curve_id": row['id'],
+            "carrier": row['carrier'],
+            "market": row['market'],
+            "fuel_category": row['fuel_category'],
+            "fuel_source": row['fuel_type'] or "Unknown",
+            "service_name": row['service'] or "",
+            "needs_conversion": conversion_info is not None,
+            "conversion_note": conversion_info.get('note') if conversion_info else None
+        })
+    
+    return {"fuel_sources": sources}
 

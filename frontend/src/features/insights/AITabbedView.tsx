@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
 	Zap,
@@ -66,10 +66,14 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 	// Track last loaded filter to detect changes
 	const lastFilterRef = useRef<string>("");
 	const isInitialLoad = useRef(true);
+	const abortControllerRef = useRef<AbortController | null>(null);
+	
+	// Stable filter key to prevent unnecessary reloads
+	const filterKey = useMemo(() => `${market || "US"}_${fuelCategory || "ground_domestic"}`, [market, fuelCategory]);
 
 	const loadAllInsights = useCallback(
 		async (forceRefresh: boolean = false) => {
-			const currentFilter = `${market}_${fuelCategory}`;
+			const currentFilter = filterKey;
 			const filterChanged = lastFilterRef.current !== currentFilter;
 			
 			// Update the ref
@@ -101,7 +105,7 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 				const data = response.data;
 
 				// Verify we're still on the same filter (prevent race condition)
-				if (`${market}_${fuelCategory}` !== lastFilterRef.current) {
+				if (filterKey !== lastFilterRef.current) {
 					console.log("Filter changed during load, ignoring stale response");
 					return;
 				}
@@ -133,6 +137,10 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 				}
 				setLoadingRecommendations(false);
 			} catch (error: any) {
+				// Ignore cancelled requests
+				if (error?.name === "AbortError" || error?.code === "ERR_CANCELED") {
+					return;
+				}
 				console.error("Failed to load AI insights:", error);
 				setErrorQuick("Failed to load insights");
 				setErrorAnalysis("Failed to load analysis");
@@ -147,12 +155,12 @@ const AITabbedView: React.FC<AITabbedViewProps> = ({
 				isInitialLoad.current = false;
 			}
 		},
-		[market, fuelCategory]
+		[filterKey, market, fuelCategory]
 	);
 
 	useEffect(() => {
 		loadAllInsights(false);
-	}, [loadAllInsights]);
+	}, [filterKey]); // Only reload when filterKey changes, not on every loadAllInsights recreation
 
 	// Refresh only the current tab - calls individual endpoint with force_refresh
 	const handleRefreshCurrentTab = async () => {

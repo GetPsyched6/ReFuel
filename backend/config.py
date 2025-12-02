@@ -66,6 +66,29 @@ INFLECTION_SKIP_LIST = {
     # Add more as needed
 }
 
+# Unit conversion configuration
+# Curves that are stored in different units than display
+# Format: (market, carrier, fuel_category): { conversion settings }
+UNIT_CONVERSIONS = {
+    # DHL DE Ground Domestic: stored in USD/gallon, display in EUR/L
+    ("DE", "DHL", "ground_domestic"): {
+        "source_unit": "usd_gallon",
+        "display_unit": "eur_liter",
+        "conversion_factor": 0.243,  # USD/gal to EUR/L (approx: 0.92 EUR/USD / 3.785 L/gal)
+        "note": "Converted from US Gulf Coast Diesel prices"
+    }
+}
+
+# Fuel type label mapping (for displaying readable names)
+FUEL_TYPE_LABELS = {
+    "jet_fuel": "USGC Jet Fuel Price (USD/Gallon)",
+    "Air": "USGC Jet Fuel Price (USD/Gallon)",
+    "Road": "US Gulf Coast Diesel (USD/Gallon)",
+    "Ground": "EIA Diesel Fuel Price (USD/Gallon)",
+    "Ground Domestic": "EIA Diesel Fuel Price (USD/Gallon)",
+    "Diesel Fuel Price": "Automotive Gas Oil (EUR/Liter)",
+}
+
 # UPS Explicit Fuel Surcharge Formulas
 # These are used when fuel prices fall outside the published range
 UPS_FORMULAS = {

@@ -1,6 +1,8 @@
-import { Sun, Moon, Clock } from "lucide-react";
+import { useState } from "react";
+import { Sun, Moon, Clock, Settings } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { motion } from "framer-motion";
+import SettingsModal from "@/components/settings/SettingsModal";
 
 interface LayoutProps {
 	children: React.ReactNode;
@@ -14,6 +16,7 @@ export default function Layout({
 	isHistorical = false,
 }: LayoutProps) {
 	const { theme, toggleTheme } = useTheme();
+	const [settingsOpen, setSettingsOpen] = useState(false);
 
 	const formatLastUpdate = (timestamp?: string) => {
 		if (!timestamp) return "No recent updates";
@@ -171,6 +174,16 @@ export default function Layout({
 								</span>
 							</motion.div>
 
+							{/* Settings */}
+							<motion.button
+								whileHover={{ scale: 1.05 }}
+								whileTap={{ scale: 0.95 }}
+								onClick={() => setSettingsOpen(true)}
+								className="p-2 rounded-lg glass dark:glass-dark hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+							>
+								<Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+							</motion.button>
+
 							{/* Theme Toggle */}
 							<motion.button
 								whileHover={{ scale: 1.05 }}
@@ -188,6 +201,9 @@ export default function Layout({
 					</div>
 				</div>
 			</header>
+
+			{/* Settings Modal */}
+			<SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
 
 			{/* Main Content */}
 			<main className="container mx-auto px-4 py-8">{children}</main>

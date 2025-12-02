@@ -41,7 +41,8 @@ async def get_fuel_curve_versions(
             effective_date,
             label,
             session_id,
-            is_active
+            is_active,
+            COALESCE(has_exact_date, 1) as has_exact_date
         FROM fuel_curve_versions
         WHERE 1=1
     """
@@ -82,7 +83,8 @@ async def get_fuel_curve_versions(
             "effective_date": row["effective_date"],
             "label": row["label"],
             "session_id": row["session_id"],
-            "is_active": bool(row["is_active"])
+            "is_active": bool(row["is_active"]),
+            "has_exact_date": bool(row["has_exact_date"])
         })
     
     # Also create a flat list for easier consumption
@@ -98,7 +100,8 @@ async def get_fuel_curve_versions(
             "effective_date": row["effective_date"],
             "label": row["label"],
             "session_id": row["session_id"],
-            "is_active": bool(row["is_active"])
+            "is_active": bool(row["is_active"]),
+            "has_exact_date": bool(row["has_exact_date"])
         })
     
     return {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card } from "@/components/ui/Card";
 import {
 	GitCompare,
@@ -122,24 +122,48 @@ export default function FuelCurveVersionComparison({
 		DEFAULT_FUEL_PRICES.default;
 	const [inputPrice, setInputPrice] = useState(defaultPrice.toString());
 
+	// Refs for abort controllers
+	const versionsAbortRef = useRef<AbortController | null>(null);
+	const curveDataAbortRef = useRef<AbortController | null>(null);
+
 	// Fetch fuel curve versions
 	useEffect(() => {
-		loadVersions();
-	}, [market, fuelCategory]);
-
-	const loadVersions = async () => {
-		setLoading(true);
-		try {
-			const response = await fuelCurveApi.getVersions(market, fuelCategory);
-			const versionsByCarrier = response.data.versions_by_carrier || {};
-			setVersions(versionsByCarrier);
-		} catch (err) {
-			console.error("Error loading fuel curve versions:", err);
-			setVersions({});
-		} finally {
-			setLoading(false);
+		// Cancel previous request
+		if (versionsAbortRef.current) {
+			versionsAbortRef.current.abort();
 		}
-	};
+		
+		const abortController = new AbortController();
+		versionsAbortRef.current = abortController;
+		
+		const loadVersions = async () => {
+			setLoading(true);
+			try {
+				const response = await fuelCurveApi.getVersions(market, fuelCategory);
+				
+				if (abortController.signal.aborted) return;
+				
+				const versionsByCarrier = response.data.versions_by_carrier || {};
+				setVersions(versionsByCarrier);
+			} catch (err: any) {
+				if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") return;
+				if (abortController.signal.aborted) return;
+				
+				console.error("Error loading fuel curve versions:", err);
+				setVersions({});
+			} finally {
+				if (!abortController.signal.aborted) {
+					setLoading(false);
+				}
+			}
+		};
+		
+		loadVersions();
+		
+		return () => {
+			abortController.abort();
+		};
+	}, [market, fuelCategory]);
 
 	// Find carriers with multiple versions
 	const carriersWithMultipleVersions = useMemo(() => {
@@ -157,54 +181,82 @@ export default function FuelCurveVersionComparison({
 
 	const activeCarrier = carriersWithMultipleVersions[activeCarrierIndex];
 
-	// Fetch curve data for active carrier's versions
+	// Fetch curve data for active carrier's versions - in parallel for better performance
 	useEffect(() => {
 		if (!activeCarrier) return;
+
+		// Cancel previous request
+		if (curveDataAbortRef.current) {
+			curveDataAbortRef.current.abort();
+		}
+		
+		const abortController = new AbortController();
+		curveDataAbortRef.current = abortController;
 
 		const fetchCurveData = async () => {
 			setLoadingCurves(true);
 			const newCurveData: Record<number, Band[]> = {};
 
 			try {
-				for (const version of activeCarrier.versions) {
-					// Use getComparisonMultiCurves with correct parameters
-					const response = await comparisonApi.getComparisonMultiCurves("raw", [
-						version.id,
-					]);
+				// Fetch all versions in parallel instead of sequentially
+				const fetchPromises = activeCarrier.versions.map(async (version) => {
+					try {
+						const response = await comparisonApi.getComparisonMultiCurves("raw", [
+							version.id,
+						]);
+						
+						if (abortController.signal.aborted) return null;
 
-					// The multi-curve API returns data in curves[].rows format
-					const curves = response.data.curves || [];
-					const curveData = curves.find((c: any) => c.curve_id === version.id);
+						const curves = response.data.curves || [];
+						const curveData = curves.find((c: any) => c.curve_id === version.id);
 
-					if (curveData && curveData.rows) {
-						newCurveData[version.id] = curveData.rows
-							.map((row: any) => ({
-								at_least_usd: row.at_least_usd,
-								but_less_than_usd: row.but_less_than_usd,
-								surcharge_pct: row.surcharge_pct,
-							}))
-							.filter(
-								(b: Band) =>
-									b.surcharge_pct !== null && b.surcharge_pct !== undefined
-							)
-							.sort((a: Band, b: Band) => a.at_least_usd - b.at_least_usd);
-
-						console.log(
-							`Loaded ${newCurveData[version.id].length} bands for version ${
-								version.id
-							} (${version.label})`
-						);
+						if (curveData && curveData.rows) {
+							const bands = curveData.rows
+								.map((row: any) => ({
+									at_least_usd: row.at_least_usd,
+									but_less_than_usd: row.but_less_than_usd,
+									surcharge_pct: row.surcharge_pct,
+								}))
+								.filter(
+									(b: Band) =>
+										b.surcharge_pct !== null && b.surcharge_pct !== undefined
+								)
+								.sort((a: Band, b: Band) => a.at_least_usd - b.at_least_usd);
+							
+							return { versionId: version.id, bands, label: version.label };
+						}
+					} catch (err: any) {
+						if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") return null;
+						console.error(`Error fetching curve data for version ${version.id}:`, err);
 					}
-				}
-			} catch (err) {
+					return null;
+				});
+
+				const results = await Promise.all(fetchPromises);
+				
+				if (abortController.signal.aborted) return;
+				
+				results.forEach((result) => {
+					if (result) {
+						newCurveData[result.versionId] = result.bands;
+					}
+				});
+			} catch (err: any) {
+				if (err?.name === "AbortError" || err?.code === "ERR_CANCELED") return;
 				console.error("Error fetching curve data:", err);
 			}
 
-			setCurveData(newCurveData);
-			setLoadingCurves(false);
+			if (!abortController.signal.aborted) {
+				setCurveData(newCurveData);
+				setLoadingCurves(false);
+			}
 		};
 
 		fetchCurveData();
+		
+		return () => {
+			abortController.abort();
+		};
 	}, [activeCarrier]);
 
 	// Get the current (active) and previous version

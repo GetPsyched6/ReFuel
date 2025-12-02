@@ -214,6 +214,7 @@ export const aiApi = {
 export const metadataApi = {
 	getFilterOptions: () => api.get("/metadata/filters"),
 	getInflectionSkipList: () => api.get("/metadata/inflection-skip-list"),
+	getFuelSources: () => api.get("/metadata/fuel-sources"),
 };
 
 // Fuel curve versions endpoints
