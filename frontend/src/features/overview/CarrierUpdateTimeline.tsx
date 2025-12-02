@@ -75,7 +75,20 @@ export default function CarrierUpdateTimeline({
 		return map;
 	}, [versions, activeCarriers]);
 
+	// Check if a date is a placeholder (has time component and no exact date flag)
+	const isPlaceholderDate = (dateStr: string, hasExactDate: boolean) => {
+		return (
+			!hasExactDate &&
+			(dateStr.includes("T") || /\d{2}:\d{2}:\d{2}/.test(dateStr))
+		);
+	};
+
 	const formatDate = (dateStr: string, hasExactDate: boolean = true) => {
+		// Check if this is a placeholder date (has time component and no exact date)
+		if (isPlaceholderDate(dateStr, hasExactDate)) {
+			return "Unknown";
+		}
+
 		const date = new Date(dateStr);
 		if (hasExactDate) {
 			return date.toLocaleDateString("en-US", {
@@ -267,12 +280,21 @@ export default function CarrierUpdateTimeline({
 															<p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-0.5">
 																From
 															</p>
-															<p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-																{formatDate(
-																	version.effective_date,
-																	version.has_exact_date ?? true
-																)}
-															</p>
+															{isPlaceholderDate(
+																version.effective_date,
+																version.has_exact_date ?? true
+															) ? (
+																<p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
+																	Unknown
+																</p>
+															) : (
+																<p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+																	{formatDate(
+																		version.effective_date,
+																		version.has_exact_date ?? true
+																	)}
+																</p>
+															)}
 														</div>
 														<ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" />
 														<div className="flex-1 text-right">

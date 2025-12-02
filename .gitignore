@@ -62,3 +62,4 @@ coverage/
 .next/
 out/
 .nuxt/
+._*

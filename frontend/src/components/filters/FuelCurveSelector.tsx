@@ -33,8 +33,20 @@ interface FuelCurveSelectorProps {
 	onSelectionChange?: (selectedCurves: SelectedCurve[]) => void;
 }
 
+// Check if a date is a placeholder (has time component and no exact date flag)
+function isPlaceholderDate(dateStr: string, hasExactDate: boolean): boolean {
+	return !hasExactDate && (dateStr.includes('T') || /\d{2}:\d{2}:\d{2}/.test(dateStr));
+}
+
 // Format a fuel curve label from the data we have
 function formatCurveLabel(version: FuelCurveVersion): string {
+	const hasExactDate = version.has_exact_date ?? true;
+	
+	// Check if this is a placeholder date
+	if (isPlaceholderDate(version.effective_date, hasExactDate)) {
+		return version.is_active ? "Current (date unknown)" : "Historical (date unknown)";
+	}
+	
 	const date = new Date(version.effective_date);
 	const monthNames = [
 		"Jan",
@@ -55,7 +67,6 @@ function formatCurveLabel(version: FuelCurveVersion): string {
 	const year = date.getFullYear();
 	
 	// Format date based on precision
-	const hasExactDate = version.has_exact_date ?? true;
 	const dateStr = hasExactDate ? `${month} ${day}, ${year}` : `${month} ${year}`;
 
 	// Use label if it's descriptive (starts with "Pre"), otherwise generate from date

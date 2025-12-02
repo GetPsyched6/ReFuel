@@ -347,42 +347,73 @@ class OverviewAnalytics:
         )
         
         if is_dhl_germany:
-            # For DHL Germany, use monthly update dates from the mapper
-            from services.dhl_germany_weekly_mapper import DHL_GERMANY_MONTHLY
+            # For DHL Germany, use the 3rd release effective dates based on UPS weekly dates
+            # DHL month M takes effect from 3rd release of (M-2) to 3rd release of (M-1)
+            from services.dhl_germany_weekly_mapper import DHL_GERMANY_MONTHLY, compute_dhl_weekly_windows
             
             fuel_category = context.fuel_category if context else None
             if fuel_category and fuel_category in DHL_GERMANY_MONTHLY:
-                monthly_data = DHL_GERMANY_MONTHLY[fuel_category]
-                dhl_updates = []
-                prev_pct = None
+                # Get UPS weekly dates from filtered_rows to compute DHL effective dates
+                ups_dates = set()
+                for row in filtered_rows:
+                    if row.get("carrier") == "UPS":
+                        date_str = row.get("effective_start")
+                        if date_str:
+                            if isinstance(date_str, str):
+                                if "T" in date_str:
+                                    date_str = date_str.split("T")[0]
+                                ups_dates.add(date_str)
                 
-                # Get DHL-specific cutoff
-                dhl_cutoff = carrier_cutoffs.get("DHL", (now - timedelta(days=months_back * 30)).replace(hour=0, minute=0, second=0, microsecond=0))
+                ups_dates_list = sorted(list(ups_dates))
                 
-                for month_key in sorted(monthly_data.keys()):
-                    month_data = monthly_data[month_key]
-                    year, month = map(int, month_key.split("-"))
+                if ups_dates_list:
+                    # Use the mapper to compute weekly windows
+                    windows = compute_dhl_weekly_windows(ups_dates_list, fuel_category)
                     
-                    # Use the 1st of the month as the update date
-                    update_date = datetime(year, month, 1)
+                    # Group by DHL month to find when each month's rate first takes effect
+                    dhl_month_first_dates = {}
+                    for window in windows:
+                        dhl_month = window.get("dhl_month")
+                        window_date = window.get("date")
+                        if dhl_month and window_date:
+                            if dhl_month not in dhl_month_first_dates or window_date < dhl_month_first_dates[dhl_month]["date"]:
+                                dhl_month_first_dates[dhl_month] = {
+                                    "date": window_date,
+                                    "surcharge": window.get("surcharge")
+                                }
                     
-                    if update_date >= dhl_cutoff:
-                        new_pct = month_data.get("surcharge")
-                        dhl_updates.append({
-                            "date": update_date.strftime("%Y-%m-%d"),
-                            "old_pct": round(prev_pct, 2) if prev_pct is not None else None,
-                            "new_pct": round(new_pct, 2) if new_pct is not None else None,
-                            "service": next(
-                                (row.get("service", "") for row in filtered_rows 
-                                 if row.get("carrier") == "DHL"),
-                                ""
-                            )
-                        })
-                        if new_pct is not None:
-                            prev_pct = new_pct
-                
-                if dhl_updates:
-                    cadence_data["DHL"] = dhl_updates
+                    dhl_updates = []
+                    prev_pct = None
+                    
+                    # Get DHL-specific cutoff
+                    dhl_cutoff = carrier_cutoffs.get("DHL", (now - timedelta(days=months_back * 30)).replace(hour=0, minute=0, second=0, microsecond=0))
+                    
+                    for month_key in sorted(dhl_month_first_dates.keys()):
+                        month_data = dhl_month_first_dates[month_key]
+                        effective_date_str = month_data["date"]
+                        
+                        try:
+                            effective_date = datetime.strptime(effective_date_str, "%Y-%m-%d")
+                        except:
+                            continue
+                        
+                        if effective_date >= dhl_cutoff:
+                            new_pct = month_data.get("surcharge")
+                            dhl_updates.append({
+                                "date": effective_date_str,
+                                "old_pct": round(prev_pct, 2) if prev_pct is not None else None,
+                                "new_pct": round(new_pct, 2) if new_pct is not None else None,
+                                "service": next(
+                                    (row.get("service", "") for row in filtered_rows 
+                                     if row.get("carrier") == "DHL"),
+                                    ""
+                                )
+                            })
+                            if new_pct is not None:
+                                prev_pct = new_pct
+                    
+                    if dhl_updates:
+                        cadence_data["DHL"] = dhl_updates
         
         # For all other carriers (and non-DHL rows), use effective_start dates
         seen_dates: Dict[str, set] = {}
